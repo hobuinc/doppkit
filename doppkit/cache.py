@@ -35,9 +35,12 @@ class Content(object):
 async def cache(args, urls, headers):
     
     files = []
-    for url in urls:
+    limits = httpx.Limits(max_keepalive_connections=args.threads/2, 
+                          max_connections=args.threads)
+    timeout = httpx.Timeout(10.0, connect=20.0)
 
-        session = httpx.AsyncClient()
+    for url in urls:
+        session = httpx.AsyncClient(timeout = timeout, limits = limits)
         files = await asyncio.gather(*[cache_url(args, url, headers, session) for url in urls])
         await session.aclose()
     return files

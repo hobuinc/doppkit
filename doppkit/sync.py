@@ -14,7 +14,7 @@ from .cache import cache
 from .grid import Api
 
 
-def doIt(args):
+def sync(args):
     """The main function for our script."""
 
     # Set up logging
@@ -31,8 +31,8 @@ def doIt(args):
     grid_path = args.url
 
     # Create a directory into which our downloads will go
-    download_dir = Path(args.download_dir)
-    logging.debug(f'download directory: {download_dir}')
+    download_dir = Path(args.directory)
+    logging.debug(f'download directory: {args.directory}')
     download_dir.mkdir(exist_ok=True)
 
     api = Api(
@@ -41,18 +41,18 @@ def doIt(args):
         logging,
     )
 
-    aois = api.get_aois(filter_substring=args.sync_flag)
+    aois = api.get_aois(filter_substring=args.filter)
 
     exportfiles = []
     for aoi in aois:
         for export in aoi['exports']:
             logging.debug(f"export: {export}")
             if isinstance(export['exportfiles'], bool):
-                if args.sync_flag in export['notes']:
+                if args.filter in export['notes']:
                     exportfiles.append(export)
             else:
                 for exportfile in export['exportfiles']:
-                    if args.sync_flag in export['notes']:
+                    if args.filter in export['notes']:
                         exportfiles.append(exportfile)
 
 
@@ -74,7 +74,7 @@ def doIt(args):
         logging.info(f'Exportfile PK {pk} downloading from {download_url} to {download_destination}')
 
         # Skip this file if we've already downloaded it
-        if not args.is_overwrite and download_destination.exists():
+        if not args.overwrite and download_destination.exists():
             logging.info(f'File already exists, skipping: {download_destination}')
         else:
             # TODO FIXME

@@ -8,7 +8,8 @@ VERSION = doppkit.__version__
 REQUIRES = [
     "httpx",
     "rich",
-    "requests"
+    "requests",
+    "click"
 ]
 
 setup(
