@@ -1,18 +1,12 @@
-import aiohttp
-import asyncio
 import json
 import io
 import sys
 import werkzeug
 import pathlib
-
-
-from aiohttp import ClientSession, TCPConnector
-import asyncio
-import sys
-import pypeln as pl
-
 import logging
+import httpx
+import rich.progress
+import asyncio
 
 
 class Content(object):
@@ -37,31 +31,36 @@ class Content(object):
     def __str__(self):
         return self.__repr__()
 
+
 async def cache(args, urls, headers):
-    limit = int(args.threads)
+    
+    files = []
+    for url in urls:
 
-    async with ClientSession(connector=TCPConnector(limit=limit), headers=headers) as session:
+        session = httpx.AsyncClient()
+        files = await asyncio.gather(*[cache_url(args, url, headers, session) for url in urls])
+        await session.aclose()
+    return files
 
-        files = []
-        async def fetch(url):
-            async with session.get(url) as response:
+async def cache_url(args, url, headers, session):
+    
+    output = None
+    buffer = bytearray()
+    with httpx.stream("GET", url, headers=headers) as response:
 
-                target = url.rpartition('/')[-1]
-                size = int(response.headers.get('content-length', 0)) or None
-                logging.debug("response headers '%s'" % response)
-                if (response.status != 200):
-                    j = await response.json()
-                    logging.debug("response '%s'" % j)
-                    raise Exception(j)
-                buffer = await response.read()
-                print(response.headers)
-                c = Content(buffer, headers= response.headers)
-                files.append(c)
+        with rich.progress.Progress(
+            "[progress.percentage]{task.percentage:>3.0f}%",
+            rich.progress.BarColumn(bar_width=None),
+            rich.progress.DownloadColumn(),
+            rich.progress.TransferSpeedColumn(),
+        ) as progress:
+            download_task = progress.add_task("Download", total=None)
+            for chunk in response.iter_bytes():
+                buffer += chunk
+                progress.update(download_task, completed=response.num_bytes_downloaded)
 
-        await pl.task.each(
-            fetch, urls, workers=limit,
-        )
-
-        return files
+            c = Content(buffer, headers= response.headers)
+            output = c
+    return output
 
 

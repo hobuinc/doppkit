@@ -6,10 +6,9 @@ NAME = "doppkit"
 VERSION = doppkit.__version__
 
 REQUIRES = [
-    "aiohttp",
-    "requests",
-    "pypeln",
-    "werkzeug"
+    "httpx",
+    "rich",
+    "requests"
 ]
 
 setup(
