@@ -16,7 +16,6 @@ from .grid import Api
 def sync(args):
     """The main function for our script."""
 
-
     # Create a directory into which our downloads will go
     download_dir = Path(args.directory)
     logging.debug(f"download directory: {args.directory}")
@@ -27,7 +26,6 @@ def sync(args):
     aois = api.get_aois(pk = args.pk)
 
 
-
     if args.filter:
         logging.debug(f'Filtering AOIs with "{args.filter}"')
         aois = [aoi for aoi in aois if args.filter in aoi["notes"]]
@@ -36,13 +34,8 @@ def sync(args):
     for aoi in aois:
         for export in aoi["exports"]:
             logging.debug(f"export: {export}")
-            if isinstance(export["exportfiles"], bool):
-                if args.filter in export["notes"]:
-                    exportfiles.append(export)
-            else:
-                for exportfile in export["exportfiles"]:
-                    if args.filter in export["notes"]:
-                        exportfiles.append(exportfile)
+            files = api.get_exports(export['pk'])
+            exportfiles.extend(files)
 
     total_downloads = len(exportfiles)
     count = 0
@@ -77,9 +70,3 @@ def sync(args):
 
     files = asyncio.run(cache(args, urls, headers))
 
-    logging.info(f"Files length {len(files)}")
-    for f in files:
-        logging.debug(f"file: {f} ")
-        logging.debug(f"file byte length: {len(f.bytes)} ")
-        c = f
-        c.save(download_dir)

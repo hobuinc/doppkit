@@ -26,7 +26,7 @@ class Api:
         urls = [aoi_endpoint]
         files = asyncio.run(cacheFunction(self.args, urls, headers))
 
-        response = json.loads(files[0].bytes)
+        response = json.load(files[0].bytes)
 
         if response.get('error'):
             raise Exception(response['error'])
@@ -41,21 +41,20 @@ class Api:
         headers = {"Authorization": f"Bearer {self.args.token}"}
         urls = [export_endpoint]
         files = asyncio.run(cacheFunction(self.args, urls, headers))
-        response = json.loads(files[0].bytes)
+        response = json.loads(files[0].data)
 
         if response.get('error'):
             return None
 
         exports = []
         for f in files:
-            j = json.loads(f.bytes)
+            j = json.loads(f.data)
             exports.append(j)
 
         output = []
         for e in exports:
             ex = e['exports']
             for item in ex:
-
                 for f in item['exportfiles']:
                     output.append(f)
         return output

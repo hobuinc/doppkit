@@ -2,6 +2,7 @@ import configparser
 
 import click
 import logging
+import pathlib
 
 from .sync import sync as syncFunction
 from .list import list as listFunctiion
@@ -58,10 +59,11 @@ def cli(ctx, token, url, log_level, threads, progress):
 @click.option(
     "--overwrite",
     default=False,
+    is_flag=True,
     type=bool,
     help="Overwrite existing fetches of the same name",
 )
-@click.option("--directory", help="Output directory to write", default="downloads")
+@click.option("--directory", help="Output directory to write", default="downloads", type=pathlib.Path)
 @click.option("--filter", help="AOI note filter query", default="")
 @click.option("--pk", help="AOI primary key to sync", default=None)
 def sync(app, timeout, start_id, overwrite, directory, filter, pk):
