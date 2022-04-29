@@ -40,12 +40,12 @@ async def cache(args, urls, headers):
 
     files = []
     limits = httpx.Limits(
-        max_keepalive_connections=args.threads / 2, max_connections=args.threads
+        max_keepalive_connections=args.threads, max_connections=args.threads
     )
     timeout = httpx.Timeout(10.0, connect=20.0)
 
+    session = httpx.AsyncClient(timeout=timeout, limits=limits)
     for url in urls:
-        session = httpx.AsyncClient(timeout=timeout, limits=limits)
         files = await asyncio.gather(
             *[cache_url(args, url, headers, session) for url in urls]
         )
@@ -65,10 +65,18 @@ async def cache_url(args, url, headers, session):
             rich.progress.DownloadColumn(),
             rich.progress.TransferSpeedColumn(),
         ) as progress:
-            download_task = progress.add_task("Download", total=None)
+            if args.progress:
+                total = None
+
+                # GRiD is lame and doesn't give us this
+                if response.headers.get('Content-length'):
+                    total = int(response.headers.get('Content-length'))
+                download_task = progress.add_task("Download", total=total)
             for chunk in response.iter_bytes():
                 buffer += chunk
-                progress.update(download_task, completed=response.num_bytes_downloaded)
+
+                if args.progress:
+                    progress.update(download_task, completed=response.num_bytes_downloaded)
 
             c = Content(buffer, headers=response.headers)
             output = c

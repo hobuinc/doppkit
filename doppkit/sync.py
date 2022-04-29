@@ -16,31 +16,21 @@ from .grid import Api
 def sync(args):
     """The main function for our script."""
 
-    # Set up logging
-    numeric_level = getattr(logging, args.log_level.upper(), None)
-    if not isinstance(numeric_level, int):
-        raise ValueError("Invalid log level: %s" % loglevel)
-    logging.basicConfig(level=numeric_level)
-
-    # Log program args
-    logging.debug(f"Program args: {args}")
-    logging.debug(f"Log level: {args.log_level}")
-
-    API_TOKEN = args.token
-    grid_path = args.url
 
     # Create a directory into which our downloads will go
     download_dir = Path(args.directory)
     logging.debug(f"download directory: {args.directory}")
     download_dir.mkdir(exist_ok=True)
 
-    api = Api(
-        API_TOKEN,
-        grid_path,
-        logging,
-    )
+    api = Api(args)
 
-    aois = api.get_aois(filter_substring=args.filter)
+    aois = api.get_aois(pk = args.pk)
+
+
+
+    if args.filter:
+        logging.debug(f'Filtering AOIs with "{args.filter}"')
+        aois = [aoi for aoi in aois if args.filter in aoi["notes"]]
 
     exportfiles = []
     for aoi in aois:
@@ -82,7 +72,7 @@ def sync(args):
             download_url = download_url.replace("httpss", "https")
             urls.append(download_url)
 
-    headers = {"Authorization": f"Bearer {API_TOKEN}"}
+    headers = {"Authorization": f"Bearer {args.token}"}
     logging.debug(urls, headers)
 
     files = asyncio.run(cache(args, urls, headers))
