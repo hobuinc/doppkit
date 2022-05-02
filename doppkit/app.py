@@ -66,7 +66,7 @@ def cli(ctx, token, url, log_level, threads, progress):
 )
 @click.option("--directory", help="Output directory to write", default="downloads", type=pathlib.Path)
 @click.option("--filter", help="AOI note filter query", default="")
-@click.option("--pk", help="AOI primary key to sync", default=None)
+@click.argument("pk",)
 def sync(app, timeout, start_id, overwrite, directory, filter, pk):
     app.start_id = start_id
     app.timeout = timeout
@@ -75,7 +75,7 @@ def sync(app, timeout, start_id, overwrite, directory, filter, pk):
     app.directory = directory
     app.filter = filter
     app.pk = pk
-    syncFunction(app)
+    syncFunction(app, pk)
 
 
 @cli.command('list-aois')

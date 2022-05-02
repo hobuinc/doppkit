@@ -13,7 +13,7 @@ from .cache import cache
 from .grid import Api
 
 
-def sync(args):
+def sync(args, pk):
     """The main function for our script."""
 
     # Create a directory into which our downloads will go
@@ -23,7 +23,7 @@ def sync(args):
 
     api = Api(args)
 
-    aois = api.get_aois(pk = args.pk)
+    aois = api.get_aois(pk)
 
 
     if args.filter:
