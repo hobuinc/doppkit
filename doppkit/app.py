@@ -5,7 +5,8 @@ import logging
 import pathlib
 
 from .sync import sync as syncFunction
-from .list import list as listFunctiion
+from .list import listAOIs as listAOIsFunction
+from .list import listExports as listExportsFunction
 
 
 class Application(object):
@@ -77,9 +78,15 @@ def sync(app, timeout, start_id, overwrite, directory, filter, pk):
     syncFunction(app)
 
 
-@cli.command()
+@cli.command('list-aois')
 @click.option("--filter", help="AOI note filter query", default="")
 @click.pass_obj
-def list(app, filter):
+def listAOIs(app, filter):
     app.filter = filter
-    listFunctiion(app)
+    listAOIsFunction(app)
+
+@cli.command('list-exports')
+@click.argument("pk",  nargs=1)
+@click.pass_obj
+def listExports(app, pk):
+    listExportsFunction(app, pk)

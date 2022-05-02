@@ -75,50 +75,63 @@ class Content(object):
 
 
 async def cache(args, urls, headers):
+    from rich.table import Column
+    from rich.progress import Progress, BarColumn, TextColumn
 
     files = []
     limits = httpx.Limits(
         max_keepalive_connections=args.threads, max_connections=args.threads
     )
-    timeout = httpx.Timeout(10.0, connect=20.0)
+    timeout = httpx.Timeout(20.0, connect=40.0)
 
-    session = httpx.AsyncClient(timeout=timeout, limits=limits)
-    for url in urls:
-        files = await asyncio.gather(
-            *[cache_url(args, url, headers, session) for url in urls]
-        )
-        await session.aclose()
-    return files
+    async with httpx.AsyncClient( timeout=None, limits=limits) as session:
+
+        text_column = TextColumn('{task.description}', table_column=Column(ratio=1))
+        bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
+        with rich.progress.Progress(
+            "[progress.percentage]{task.percentage:>3.0f}%",
+            text_column,
+            bar_column,
+            rich.progress.DownloadColumn(),
+            rich.progress.TransferSpeedColumn(),
+        ) as progress:
+            for url in urls:
+                files = await asyncio.gather(
+                    *[cache_url(args, url, headers, session, progress) for url in urls]
+                )
+            await session.aclose()
+            return files
 
 
-async def cache_url(args, url, headers, session):
+async def cache_url(args, url, headers, session, progress):
 
     output = None
     buffer = bytearray()
-    with rich.progress.Progress(
-        "[progress.percentage]{task.percentage:>3.0f}%",
-        rich.progress.BarColumn(bar_width=None),
-        rich.progress.DownloadColumn(),
-        rich.progress.TransferSpeedColumn(),
-    ) as progress:
-        with httpx.stream("GET", url, headers=headers) as response:
+    logging.info(f"fetching url '{url}'")
+    with httpx.stream("GET", url, headers=headers, timeout=None) as response:
+
+        c = Content(response.headers, args=args)
+        if args.progress:
+            total = None
+
+            # GRiD doesn't give us this
+            if response.headers.get('Content-length'):
+                total = int(response.headers.get('Content-length'))
+            name = c.filename
+            if name:
+                name = c.filename.name # just use basename
+            download_task = progress.add_task(f"{name}", total=total)
+        
+        chunk_count = 0
+        for chunk in response.iter_bytes():
+            count = c.bytes.write(chunk)
+            chunk_count = chunk_count + 1
 
             if args.progress:
-                total = None
+                num_bytes = response.num_bytes_downloaded
+                progress.update(download_task, completed=num_bytes)
 
-                # GRiD doesn't give us this
-                if response.headers.get('Content-length'):
-                    total = int(response.headers.get('Content-length'))
-                download_task = progress.add_task("Download", total=total)
-            
-            c = Content(response.headers, args=args)
-            for chunk in response.iter_bytes():
-                count = c.bytes.write(chunk)
-
-                if args.progress:
-                    progress.update(download_task, completed=response.num_bytes_downloaded)
-
-            c.bytes.flush()
-            c.bytes.seek(0)
-            output = c
+        c.bytes.flush()
+        c.bytes.seek(0)
+        output = c
     return output
