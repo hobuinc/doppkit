@@ -78,13 +78,12 @@ async def cache(args, urls, headers):
     from rich.table import Column
     from rich.progress import Progress, BarColumn, TextColumn
 
-    files = []
     limits = httpx.Limits(
         max_keepalive_connections=args.threads, max_connections=args.threads
     )
     timeout = httpx.Timeout(20.0, connect=40.0)
 
-    async with httpx.AsyncClient( timeout=None, limits=limits) as session:
+    async with httpx.AsyncClient(timeout=timeout, limits=limits) as session:
 
         text_column = TextColumn('{task.description}', table_column=Column(ratio=1))
         bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
@@ -95,12 +94,11 @@ async def cache(args, urls, headers):
             rich.progress.DownloadColumn(),
             rich.progress.TransferSpeedColumn(),
         ) as progress:
-            for url in urls:
-                files = await asyncio.gather(
-                    *[cache_url(args, url, headers, session, progress) for url in urls]
-                )
+            files = await asyncio.gather(
+                *[cache_url(args, url, headers, session, progress) for url in urls]
+            )
             await session.aclose()
-            return files
+    return files
 
 
 async def cache_url(args, url, headers, session, progress):
@@ -121,7 +119,7 @@ async def cache_url(args, url, headers, session, progress):
             if name:
                 name = c.filename.name # just use basename
             download_task = progress.add_task(f"{name}", total=total)
-        
+
         chunk_count = 0
         for chunk in response.iter_bytes():
             count = c.bytes.write(chunk)
