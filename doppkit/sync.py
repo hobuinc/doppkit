@@ -1,12 +1,6 @@
-import json
-import os
-import sys
 import logging
-import aiohttp
 import asyncio
 
-from argparse import ArgumentParser
-from urllib.request import urlopen, Request
 from pathlib import Path
 
 from .cache import cache
@@ -24,7 +18,6 @@ def sync(args, pk):
     api = Api(args)
 
     aois = api.get_aois(pk)
-
 
     if args.filter:
         logging.debug(f'Filtering AOIs with "{args.filter}"')
@@ -60,13 +53,9 @@ def sync(args, pk):
         if not args.overwrite and download_destination.exists():
             logging.info(f"File already exists, skipping: {download_destination}")
         else:
-            # TODO FIXME
-            download_url = download_url.replace("http", "https")
-            download_url = download_url.replace("httpss", "https")
             urls.append(download_url)
 
     headers = {"Authorization": f"Bearer {args.token}"}
     logging.debug(urls, headers)
 
-    files = asyncio.run(cache(args, urls, headers))
-
+    _ = asyncio.run(cache(args, urls, headers))

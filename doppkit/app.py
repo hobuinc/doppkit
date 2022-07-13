@@ -1,5 +1,3 @@
-import configparser
-
 import click
 import logging
 import pathlib
@@ -10,7 +8,7 @@ from .list import listExports as listExportsFunction
 
 
 class Application(object):
-    def __init__(self, token=None, url=None, log_level=logging.ERROR, threads = 20):
+    def __init__(self, token=None, url=None, log_level=logging.ERROR, threads=20):
         self.token = token
         self.url = url
         self.log_level = log_level
@@ -28,7 +26,7 @@ class Application(object):
     "--url",
     envvar="GRID_BASE_URL",
     default="https://grid.nga.mil/grid",
-    help="GRiD Instance URL. Use GRID_BASE_URL environment variable to gobally override",
+    help="GRiD Instance URL. Use GRID_BASE_URL environment variable to globally override",
 )
 @click.option("--log-level", default="INFO", help="Log level (INFO/DEBUG)")
 @click.option("--threads", default=20, type=int, help="Fetch thread count")
@@ -39,7 +37,7 @@ def cli(ctx, token, url, log_level, threads, progress):
     # Set up logging
     numeric_level = getattr(logging, log_level.upper(), None)
     if not isinstance(numeric_level, int):
-        raise ValueError("Invalid log level: %s" % log_level)
+        raise ValueError(f"Invalid log level: {log_level}")
     logging.basicConfig(level=numeric_level)
 
     # Log program args
@@ -54,7 +52,6 @@ def cli(ctx, token, url, log_level, threads, progress):
 
 @cli.command()
 @click.pass_obj
-
 @click.option("--timeout", help="Connection timeout", default=20)
 @click.option("--start-id", help="Export ID to resume fetching", type=int, default=0)
 @click.option(
@@ -84,6 +81,7 @@ def sync(app, timeout, start_id, overwrite, directory, filter, pk):
 def listAOIs(app, filter):
     app.filter = filter
     listAOIsFunction(app)
+
 
 @cli.command('list-exports')
 @click.argument("pk",  nargs=1)
