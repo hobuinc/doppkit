@@ -1,4 +1,3 @@
-# coding: utf-8
 from setuptools import setup, find_packages
 
 import doppkit
@@ -6,9 +5,10 @@ NAME = "doppkit"
 VERSION = doppkit.__version__
 
 REQUIRES = [
+    "aiohttp",
+    "werkzeug",
     "httpx",
     "rich",
-    "requests",
     "click"
 ]
 
@@ -17,12 +17,12 @@ setup(
     version=VERSION,
     description="GRiD API v3",
     author_email="",
-    url="",
+    url="https://github.com/hobuinc/doppkit",
     install_requires=REQUIRES,
     packages=find_packages(),
     include_package_data=True,
-    zip_safe = False,
-    entry_points = {
+    zip_safe=False,
+    entry_points={
         'console_scripts': ['doppkit=doppkit.__main__:main'],
     },
     long_description="""\
