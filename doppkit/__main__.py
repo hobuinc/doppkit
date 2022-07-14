@@ -1,6 +1,3 @@
-from argparse import ArgumentParser
-import configparser
-
 from .app import cli
 
 

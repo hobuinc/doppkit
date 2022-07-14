@@ -1,11 +1,7 @@
 
 from .grid import Api
-import click
-import logging
-import asyncio
 from rich.console import Console
 from rich.table import Table
-
 
 
 def listAOIs(args):
@@ -14,9 +10,8 @@ def listAOIs(args):
     api = Api(args)
     aois = api.get_aois()
 
-
     console = Console()
-    table = Table(title=f'AOIs')
+    table = Table(title='AOIs')
 
     table.add_column("AOI PK", justify="right")
     # table.add_column("Export PK", justify="right")
@@ -25,11 +20,9 @@ def listAOIs(args):
     for aoi in aois:
         pk = str(aoi['pk'])
         name = str(aoi['name'])
-
-        table.add_row(pk, name )
+        table.add_row(pk, name)
 
     console.print(table)
-
 
 
 def listExports(args, pk):
@@ -55,6 +48,12 @@ def listExports(args, pk):
             export_pk = export['pk']
             exports = api.get_exports(export_pk)
             for e in exports:
-                table.add_row(str(export_pk), str(e['pk']), e['name'] , e['datatype'], str(e['filesize']))
+                table.add_row(
+                    str(export_pk),
+                    str(e['pk']),
+                    e['name'],
+                    e['datatype'],
+                    str(e['filesize'])
+                )
 
     console.print(table)
