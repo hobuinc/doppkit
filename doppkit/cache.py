@@ -3,13 +3,18 @@ import pathlib
 import logging
 import httpx
 import rich.progress
+
 import asyncio
 
 from io import BytesIO
 from werkzeug import http
+from rich.table import Column
+from rich.progress import Progress, BarColumn, TextColumn
+
+__all__ = ["cache"]
 
 
-class Content(object):
+class Content:
     def __init__(self, headers, filename=None, args=None):
         self.filename = filename
         self.directory = None
@@ -64,10 +69,9 @@ class Content(object):
         return self.__repr__()
 
 
-async def cache(args, urls, headers):
-    from rich.table import Column
-    from rich.progress import Progress, BarColumn, TextColumn
 
+
+async def cache(args, urls, headers):
     limits = httpx.Limits(
         max_keepalive_connections=args.threads, max_connections=args.threads
     )
