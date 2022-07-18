@@ -40,9 +40,6 @@ def listExports(args, pk):
     table.add_column("Name")
     table.add_column("Type")
     table.add_column("Size")
-    pk = str(aoi['pk'])
-    name = str(aoi['name'])
-
     if aoi.get('exports'):
         for export in aoi['exports']:
             export_pk = export['pk']
@@ -55,5 +52,4 @@ def listExports(args, pk):
                     e['datatype'],
                     str(e['filesize'])
                 )
-
     console.print(table)

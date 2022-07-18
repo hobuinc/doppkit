@@ -1,15 +1,14 @@
 import contextlib
 import pathlib
 import logging
+import typing
 import httpx
-import rich.progress
-
 import asyncio
 
 from io import BytesIO
 from werkzeug import http
 from rich.table import Column
-from rich.progress import Progress, BarColumn, TextColumn
+from rich.progress import DownloadColumn, Progress, BarColumn, TextColumn, TransferSpeedColumn
 
 __all__ = ["cache"]
 
@@ -28,7 +27,7 @@ class Content:
                 self.filename = self.directory.joinpath(self.filename)
         self._open()
     
-    def __exit__(self):
+    def __exit__(self, exc_type, exc_value, traceback):
         self.bytes.close()
 
     def _open(self):
@@ -40,7 +39,7 @@ class Content:
         return self.bytes.read()
     data = property(get_data)
 
-    def _extract_filename(self, headers):
+    def _extract_filename(self, headers) -> typing.Optional[pathlib.Path]:
         filename = None
         if "Content-Disposition" in headers:
             disposition = headers["Content-Disposition"]
@@ -69,8 +68,6 @@ class Content:
         return self.__repr__()
 
 
-
-
 async def cache(args, urls, headers):
     limits = httpx.Limits(
         max_keepalive_connections=args.threads, max_connections=args.threads
@@ -81,12 +78,12 @@ async def cache(args, urls, headers):
 
         text_column = TextColumn('{task.description}', table_column=Column(ratio=1))
         bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
-        with rich.progress.Progress(
+        with Progress(
             "[progress.percentage]{task.percentage:>3.0f}%",
             text_column,
             bar_column,
-            rich.progress.DownloadColumn(),
-            rich.progress.TransferSpeedColumn(),
+            DownloadColumn(),
+            TransferSpeedColumn(),
         ) as progress:
             files = await asyncio.gather(
                 *[cache_url(args, url, headers, session, progress) for url in urls]
