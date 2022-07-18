@@ -1,0 +1,26 @@
+[project]
+name = "doppkit"
+dynamic = ["version", "readme"]
+requires-python = ">=3.7"
+license = { file="LICENSE" }
+dependencies = [
+    "werkzeug",
+    "httpx",
+    "rich",
+    "click"
+]
+
+[tool.setuptools]
+package-dir = {"" =  "src"}
+zip-safe = false
+
+[tool.setuptools.dynamic]
+version = { attr = "doppkit.__version__" }
+readme = { file = ["README.md"] }
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project.scripts]
+doppkit = "doppkit.__main__:main"

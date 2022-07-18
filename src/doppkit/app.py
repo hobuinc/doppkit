@@ -13,7 +13,8 @@ class Application(object):
         self.url = url
         self.log_level = log_level
         self.threads = threads
-
+        self.progress = False
+        self.logging = logging
 
 @click.group()
 @click.option(
