@@ -12,6 +12,7 @@ dependencies = [
 
 [tool.setuptools]
 package-dir = {"" =  "src"}
+zip-safe = false
 
 [tool.setuptools.dynamic]
 version = { attr = "doppkit.__version__" }
@@ -21,5 +22,5 @@ readme = { file = ["README.md"] }
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[doppkit.scripts]
+[project.scripts]
 doppkit = "doppkit.__main__:main"
