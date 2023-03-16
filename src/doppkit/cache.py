@@ -79,15 +79,8 @@ class Content:
     def __str__(self):
         return self.__repr__()
 
-class AsyncList(collections.UserList):
 
-    async def extend_async(self, aiter):
-        async for obj in aiter:
-            self.append(obj)
-    
-
-
-async def cache(args, urls):
+async def cache(args, urls, headers):
     limits = httpx.Limits(
         max_keepalive_connections=args.threads, max_connections=args.threads
     )
@@ -108,20 +101,17 @@ async def cache(args, urls):
         #     DownloadColumn(),
         #     TransferSpeedColumn(),
         # ) as progress:
-        # files = AsyncList()
-        # await files.extend_async(cache_url(args, url, session, None) async for url in urls)
         files = await asyncio.gather(
-            *[cache_url(args, url, session, None) async for url in urls]
+            *[cache_url(args, url, headers, session, None) for url in urls]
         )
     return files
 
 
-async def cache_url(args, url, session, progress):
-    headers = {"Authorization": f"Bearer {args.token}"}
+async def cache_url(args, url, headers, session, progress):
 
     output = None
     logging.info(f"fetching url '{url}'")
-    async with session.stream("GET", url, headers=headers, timeout=None) as response:
+    async with session.stream("GET", url, headers=headers, timeout=None, follow_redirects=True) as response:
         print(f"{session._transport.memory=}")
         c = Content(response.headers, args=args)
 
@@ -137,7 +127,7 @@ async def cache_url(args, url, session, progress):
         #     download_task = progress.add_task(f"{name}", total=total)
 
         chunk_count = 0
-        for chunk in response.iter_bytes():
+        async for chunk in response.aiter_bytes():
             _ = c.bytes.write(chunk)
             chunk_count = chunk_count + 1
 

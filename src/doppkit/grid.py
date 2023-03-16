@@ -10,12 +10,6 @@ export_endpoint_ext = "/api/v3/exports"
 task_endpoint_ext = "/api/v3/tasks"
 
 
-async def as_aiter(it):
-    # thank you stack overflow user4815162342
-    # https://stackoverflow.com/a/51883194
-    for val in it:
-        yield val
-
 class Api:
     def __init__(self, args):
         self.args = args
@@ -30,9 +24,10 @@ class Api:
             url_args += "&export_full=true"
             aoi_endpoint = f"{self.args.url}{aoi_endpoint_ext}?{url_args}"
 
-        urls = as_aiter([aoi_endpoint])
-        files = asyncio.run(cacheFunction(self.args, urls))
-        # files = asyncio.run(cacheFunction(self.args, urls, headers))
+        urls = (aoi_endpoint, )
+        headers = {"Authorization": f"Bearer {self.args.token}"}
+
+        files = asyncio.run(cacheFunction(self.args, urls, headers))
 
         response = json.load(files[0].bytes)
 
