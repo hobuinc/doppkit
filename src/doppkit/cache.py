@@ -14,27 +14,14 @@ __all__ = ["cache"]
 
 class MyTransport(httpx.AsyncHTTPTransport):
 
-    def __init__(self, memory) -> None:
-        self.memory = memory
+    def __init__(self) -> None:
+        # self.memory = memory
+        self.memory = []
         super().__init__()
 
     def handle_async_request(self, request):
-        breakpoint()
         self.memory.append(request.headers)
         return super().handle_async_request(request)
-
-        # breakpoint()
-        # scheme, host, port, path = url
-        # if port is None:
-        #     location = b"https://%s%s" % (host, path)
-        # else:
-        #     location = b"https://%s:%d%s" % (host, port, path)
-        # stream = httpx.ByteStream(b"")
-        # headers = [(b"location", location)]
-        # extensions = {}
-        # self.memory.append(headers)
-        # return 303, headers, stream, extensions
-
 
 
 class Content:
@@ -96,12 +83,11 @@ async def cache(args, urls, headers):
         max_keepalive_connections=args.threads, max_connections=args.threads
     )
     timeout = httpx.Timeout(20.0, connect=40.0)
-    memory = []
     async with httpx.AsyncClient(
         timeout=timeout,
         limits=limits,
         follow_redirects=True,
-        transport=MyTransport(memory=memory)) as session:
+        transport=MyTransport()) as session:
 
         # breakpoint()
         # text_column = TextColumn('{task.description}', table_column=Column(ratio=1))
@@ -114,19 +100,19 @@ async def cache(args, urls, headers):
         #     TransferSpeedColumn(),
         # ) as progress:
         files = await asyncio.gather(
-            *[cache_url(args, url, headers, session, None, memory) for url in urls]
+            *[cache_url(args, url, headers, session, None) for url in urls]
         )
     return files
 
 
-async def cache_url(args, url, headers, session, progress, memory):
+async def cache_url(args, url, headers, session, progress):
 
     output = None
     logging.info(f"fetching url '{url}'")
     async with session.stream("GET", url, headers=headers, timeout=None) as response:
-        print(f"{memory=}")
-        # breakpoint()
+        print(f"{session._transport.memory=}")
         c = Content(response.headers, args=args)
+
         # if args.progress:
         #     total = None
 
