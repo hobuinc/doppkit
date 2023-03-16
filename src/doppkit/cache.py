@@ -85,7 +85,7 @@ async def cache(args, urls, headers):
             DownloadColumn(),
             TransferSpeedColumn(),
         ) as progress:
-            files = await asyncio.gather(
+            files = await asyncio.gather
                 *[cache_url(args, url, headers, session, progress) for url in urls]
             )
     return files
@@ -95,7 +95,7 @@ async def cache_url(args, url, headers, session, progress):
 
     output = None
     logging.info(f"fetching url '{url}'")
-    with httpx.stream("GET", url, headers=headers, timeout=None) as response:
+    with httpx.stream("GET", url, headers=headers, timeout=None, follow_redirects=True) as response:
 
         c = Content(response.headers, args=args)
         if args.progress:
