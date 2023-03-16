@@ -1,9 +1,11 @@
+import collections
 import contextlib
 import pathlib
 import logging
 import typing
 import httpx
 import asyncio
+
 
 from io import BytesIO
 from werkzeug import http
@@ -77,8 +79,15 @@ class Content:
     def __str__(self):
         return self.__repr__()
 
+class AsyncList(collections.UserList):
 
-async def cache(args, urls, headers):
+    async def extend_async(self, aiter):
+        async for obj in aiter:
+            self.append(obj)
+    
+
+
+async def cache(args, urls):
     limits = httpx.Limits(
         max_keepalive_connections=args.threads, max_connections=args.threads
     )
@@ -99,13 +108,16 @@ async def cache(args, urls, headers):
         #     DownloadColumn(),
         #     TransferSpeedColumn(),
         # ) as progress:
+        # files = AsyncList()
+        # await files.extend_async(cache_url(args, url, session, None) async for url in urls)
         files = await asyncio.gather(
-            *[cache_url(args, url, headers, session, None) for url in urls]
+            *[cache_url(args, url, session, None) async for url in urls]
         )
     return files
 
 
-async def cache_url(args, url, headers, session, progress):
+async def cache_url(args, url, session, progress):
+    headers = {"Authorization": f"Bearer {args.token}"}
 
     output = None
     logging.info(f"fetching url '{url}'")
