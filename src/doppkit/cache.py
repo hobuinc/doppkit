@@ -1,4 +1,3 @@
-import collections
 import contextlib
 import pathlib
 import logging
@@ -17,11 +16,16 @@ __all__ = ["cache"]
 class MyTransport(httpx.AsyncHTTPTransport):
 
     def __init__(self) -> None:
-        # self.memory = memory
         self.memory = []
         super().__init__()
 
     def handle_async_request(self, request):
+
+        memory = {
+            "url": request.url,
+            "header": request.headers,
+            "method": request.method,
+        }
         self.memory.append(request.headers)
         return super().handle_async_request(request)
 
@@ -88,10 +92,7 @@ async def cache(args, urls, headers):
     async with httpx.AsyncClient(
         timeout=timeout,
         limits=limits,
-        follow_redirects=True,
         transport=MyTransport()) as session:
-
-        # breakpoint()
         # text_column = TextColumn('{task.description}', table_column=Column(ratio=1))
         # bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
         # with Progress(
@@ -111,8 +112,13 @@ async def cache_url(args, url, headers, session, progress):
 
     output = None
     logging.info(f"fetching url '{url}'")
-    async with session.stream("GET", url, headers=headers, timeout=None, follow_redirects=True) as response:
+    async with session.stream("GET", url, headers=headers, timeout=None) as response:
         print(f"{session._transport.memory=}")
+        while "Content-Disposition" not in response.headers:
+            request = response.next_request
+            if request is None:
+                break
+            response = await session.send(request, stream=True)
         c = Content(response.headers, args=args)
 
         # if args.progress:
