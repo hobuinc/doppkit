@@ -12,13 +12,36 @@ from rich.progress import DownloadColumn, Progress, BarColumn, TextColumn, Trans
 
 __all__ = ["cache"]
 
+class MyTransport(httpx.AsyncHTTPTransport):
+
+    def __init__(self, memory) -> None:
+        self.memory = memory
+        super().__init__()
+
+    def handle_async_request(self, request):
+        breakpoint()
+        self.memory.append(request.headers)
+        return super().handle_async_request(request)
+
+        # breakpoint()
+        # scheme, host, port, path = url
+        # if port is None:
+        #     location = b"https://%s%s" % (host, path)
+        # else:
+        #     location = b"https://%s:%d%s" % (host, port, path)
+        # stream = httpx.ByteStream(b"")
+        # headers = [(b"location", location)]
+        # extensions = {}
+        # self.memory.append(headers)
+        # return 303, headers, stream, extensions
+
+
 
 class Content:
     def __init__(self, headers, filename=None, args=None):
         self.filename = filename
         self.directory = None
         self.headers = headers
-
         if not filename:
             self.filename = self._extract_filename(headers)
         if self.filename:
@@ -43,7 +66,7 @@ class Content:
         filename = None
         if "Content-Disposition" in headers:
             disposition = headers["Content-Disposition"]
-            logging.debug("disposition '%s'" % disposition)
+            logging.debug(f"disposition '{disposition}'")
             if "attachment" in disposition.lower():
                 # grab Aioysius_PC_20200121.zip from 'attachment; filename="Aioysius_PC_20200121.zip"'
                 attachment = http.parse_options_header(
@@ -73,52 +96,58 @@ async def cache(args, urls, headers):
         max_keepalive_connections=args.threads, max_connections=args.threads
     )
     timeout = httpx.Timeout(20.0, connect=40.0)
+    memory = []
+    async with httpx.AsyncClient(
+        timeout=timeout,
+        limits=limits,
+        follow_redirects=True,
+        transport=MyTransport(memory=memory)) as session:
 
-    async with httpx.AsyncClient(timeout=timeout, limits=limits) as session:
-
-        text_column = TextColumn('{task.description}', table_column=Column(ratio=1))
-        bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
-        with Progress(
-            "[progress.percentage]{task.percentage:>3.0f}%",
-            text_column,
-            bar_column,
-            DownloadColumn(),
-            TransferSpeedColumn(),
-        ) as progress:
-            files = await asyncio.gather(
-                *[cache_url(args, url, headers, session, progress) for url in urls]
-            )
+        # breakpoint()
+        # text_column = TextColumn('{task.description}', table_column=Column(ratio=1))
+        # bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
+        # with Progress(
+        #     "[progress.percentage]{task.percentage:>3.0f}%",
+        #     text_column,
+        #     bar_column,
+        #     DownloadColumn(),
+        #     TransferSpeedColumn(),
+        # ) as progress:
+        files = await asyncio.gather(
+            *[cache_url(args, url, headers, session, None, memory) for url in urls]
+        )
     return files
 
 
-async def cache_url(args, url, headers, session, progress):
+async def cache_url(args, url, headers, session, progress, memory):
 
     output = None
     logging.info(f"fetching url '{url}'")
-    with httpx.stream("GET", url, headers=headers, timeout=None, follow_redirects=True) as response:
-
+    async with session.stream("GET", url, headers=headers, timeout=None) as response:
+        print(f"{memory=}")
+        # breakpoint()
         c = Content(response.headers, args=args)
-        if args.progress:
-            total = None
+        # if args.progress:
+        #     total = None
 
-            # GRiD doesn't give us this
-            if response.headers.get('Content-length'):
-                total = int(response.headers.get('Content-length'))
-            name = c.filename
-            if name:
-                name = c.filename.name  # just use basename
-            download_task = progress.add_task(f"{name}", total=total)
+        #     # GRiD doesn't give us this
+        #     if response.headers.get('Content-length'):
+        #         total = int(response.headers.get('Content-length'))
+        #     name = c.filename
+        #     if name:
+        #         name = c.filename.name  # just use basename
+        #     download_task = progress.add_task(f"{name}", total=total)
 
         chunk_count = 0
         for chunk in response.iter_bytes():
             _ = c.bytes.write(chunk)
             chunk_count = chunk_count + 1
 
-            if args.progress:
-                num_bytes = response.num_bytes_downloaded
-                progress.update(download_task, completed=num_bytes)
+            # if args.progress:
+            #     num_bytes = response.num_bytes_downloaded
+            #     progress.update(download_task, completed=num_bytes)
 
-        c.bytes.flush()
-        c.bytes.seek(0)
-        output = c
+    c.bytes.flush()
+    c.bytes.seek(0)
+    output = c
     return output
