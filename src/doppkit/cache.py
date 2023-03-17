@@ -1,3 +1,4 @@
+import aiofiles
 import contextlib
 import pathlib
 import logging
@@ -13,22 +14,6 @@ from rich.progress import DownloadColumn, Progress, BarColumn, TextColumn, Trans
 
 __all__ = ["cache"]
 
-class MyTransport(httpx.AsyncHTTPTransport):
-
-    def __init__(self) -> None:
-        self.memory = []
-        super().__init__()
-
-    def handle_async_request(self, request):
-
-        memory = {
-            "url": request.url,
-            "header": request.headers,
-            "method": request.method,
-        }
-        self.memory.append(request.headers)
-        return super().handle_async_request(request)
-
 
 class Content:
     def __init__(self, headers, filename=None, args=None):
@@ -41,13 +26,14 @@ class Content:
             with contextlib.suppress(AttributeError):
                 self.directory = args.directory
                 self.filename = self.directory.joinpath(self.filename)
+        # breakpoint()
         self._open()
     
     def __exit__(self, exc_type, exc_value, traceback):
         self.bytes.close()
 
     def _open(self):
-        self.bytes = open(self.filename, 'wb+') if self.filename else BytesIO()
+        self.bytes = aiofiles.open(self.filename, 'wb+') if self.filename else BytesIO()
 
     def get_data(self):
         self.bytes.flush()
@@ -91,8 +77,7 @@ async def cache(args, urls, headers):
     timeout = httpx.Timeout(20.0, connect=40.0)
     async with httpx.AsyncClient(
         timeout=timeout,
-        limits=limits,
-        transport=MyTransport()) as session:
+        limits=limits) as session:
         # text_column = TextColumn('{task.description}', table_column=Column(ratio=1))
         # bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
         # with Progress(
@@ -112,15 +97,31 @@ async def cache_url(args, url, headers, session, progress):
 
     output = None
     logging.info(f"fetching url '{url}'")
+    request = None
     async with session.stream("GET", url, headers=headers, timeout=None) as response:
-        print(f"{session._transport.memory=}")
         while "Content-Disposition" not in response.headers:
+            # if isinstance(request, httpx.Request):
+            #     await request.aclose()
             request = response.next_request
             if request is None:
                 break
             response = await session.send(request, stream=True)
         c = Content(response.headers, args=args)
+        if c.filename:
+            c.bytes.close()
+            async with aiofiles.open(c.filename, "wb") as f:
+                async for chunk in response.aiter_bytes():
+                    await f.write(chunk)
+                    # await f.flush()
+        else:
+            # pass
+            chunk_count = 0
+            async for chunk in response.aiter_bytes():
+                c.bytes.write(chunk)
+                chunk_count += 1
 
+            c.bytes.flush()
+            c.bytes.seek(0)
         # if args.progress:
         #     total = None
 
@@ -131,17 +132,12 @@ async def cache_url(args, url, headers, session, progress):
         #     if name:
         #         name = c.filename.name  # just use basename
         #     download_task = progress.add_task(f"{name}", total=total)
-
-        chunk_count = 0
-        async for chunk in response.aiter_bytes():
-            _ = c.bytes.write(chunk)
-            chunk_count = chunk_count + 1
-
+        # if isinstance(request, httpx.Request):
+        #     await request.aclose()
             # if args.progress:
             #     num_bytes = response.num_bytes_downloaded
             #     progress.update(download_task, completed=num_bytes)
 
-    c.bytes.flush()
-    c.bytes.seek(0)
+    # breakpoint()
     output = c
     return output
