@@ -77,7 +77,7 @@ async def cache(args, urls, headers):
     timeout = httpx.Timeout(20.0, connect=40.0)
     async with httpx.AsyncClient(
         timeout=timeout,
-        limits=limits) as session:
+        limits=limits) as client:
         # text_column = TextColumn('{task.description}', table_column=Column(ratio=1))
         # bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
         # with Progress(
@@ -88,31 +88,36 @@ async def cache(args, urls, headers):
         #     TransferSpeedColumn(),
         # ) as progress:
         files = await asyncio.gather(
-            *[cache_url(args, url, headers, session, None) for url in urls]
+            *[cache_url(args, url, headers, client, None) for url in urls], return_exceptions=True
         )
+        # await client.aclose()
     return files
 
 
-async def cache_url(args, url, headers, session, progress):
+async def cache_url(args, url, headers, client, progress):
 
     output = None
     logging.info(f"fetching url '{url}'")
     request = None
-    async with session.stream("GET", url, headers=headers, timeout=None) as response:
+    async with client.stream("GET", url, headers=headers, timeout=None) as response:
         while "Content-Disposition" not in response.headers:
             # if isinstance(request, httpx.Request):
             #     await request.aclose()
             request = response.next_request
             if request is None:
                 break
-            response = await session.send(request, stream=True)
+            response = await client.send(request, stream=True)
         c = Content(response.headers, args=args)
         if c.filename:
             c.bytes.close()
             async with aiofiles.open(c.filename, "wb") as f:
-                async for chunk in response.aiter_bytes():
-                    await f.write(chunk)
-                    # await f.flush()
+                try:
+                    async for chunk in response.aiter_bytes():
+                        await f.write(chunk)
+                        # await f.flush()
+                except Exception as e:
+                    print(e)
+                    breakpoint()
         else:
             # pass
             chunk_count = 0
