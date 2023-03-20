@@ -59,5 +59,4 @@ def sync(args, pk):
     headers = {"Authorization": f"Bearer {args.token}"}
     logging.debug(urls, headers)
 
-    breakpoint()
-    _ = asyncio.run(cache(args, itertools.chain(urls), headers))
+    _ = asyncio.run(cache(args, urls, headers))

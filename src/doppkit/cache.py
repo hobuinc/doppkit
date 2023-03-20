@@ -6,7 +6,6 @@ import typing
 import httpx
 import asyncio
 
-
 from io import BytesIO
 from werkzeug import http
 from rich.table import Column
@@ -16,34 +15,24 @@ __all__ = ["cache"]
 
 
 class Content:
-    def __init__(self, headers, filename=None, args=None):
-        self.filename = filename
+    def __init__(self, headers, filename: typing.Optional[pathlib.Path]=None, args=None):
         self.directory = None
         self.headers = headers
-        if not filename:
-            self.filename = self._extract_filename(headers)
-        if self.filename:
+
+        if filename is None:
+            filename = self._extract_filename(headers)
+
+        if isinstance(filename, pathlib.Path):
             with contextlib.suppress(AttributeError):
                 self.directory = args.directory
-                self.filename = self.directory.joinpath(self.filename)
-        # breakpoint()
-        self._open()
-    
-    def __exit__(self, exc_type, exc_value, traceback):
-        self.bytes.close()
+                filename = self.directory.joinpath(filename)
 
-    def _open(self):
-        self.bytes = aiofiles.open(self.filename, 'wb+') if self.filename else BytesIO()
+        self.target: BytesIO | pathlib.Path = BytesIO() if filename is None else filename
 
-    def get_data(self):
-        self.bytes.flush()
-        self.bytes.seek(0)  
-        return self.bytes.read()
-    data = property(get_data)
-
-    def _extract_filename(self, headers) -> typing.Optional[pathlib.Path]:
+    @classmethod
+    def _extract_filename(cls, headers) -> typing.Optional[pathlib.Path]:
         filename = None
-        if "Content-Disposition" in headers:
+        if "content-disposition" in [key.lower() for key in headers.keys()]:
             disposition = headers["Content-Disposition"]
             logging.debug(f"disposition '{disposition}'")
             if "attachment" in disposition.lower():
@@ -56,18 +45,23 @@ class Content:
                 filename = None
         return filename
 
-    def save(self):
-        logging.debug(f"saving file to {self.filename}")
-        if not self.filename:
-            raise AttributeError("Unable to open content object. No filename set")
-        with open(self.filename, "wb+") as f:
-            f.write(self.bytes.read())
-
     def __repr__(self):
-        return f"Content {self.filename} {self.headers}"
+        return f"Content {self.target} {self.headers}"
 
     def __str__(self):
         return self.__repr__()
+
+
+    def get_data(self):
+        if isinstance(self.target, BytesIO):
+            self.target.flush()
+            self.target.seek(0)
+            return self.target.read()
+
+        else:
+            raise NotImplementedError("data intended to be used with BytesIO objects")
+    data = property(get_data)
+
 
 
 async def cache(args, urls, headers):
@@ -75,74 +69,81 @@ async def cache(args, urls, headers):
         max_keepalive_connections=args.threads, max_connections=args.threads
     )
     timeout = httpx.Timeout(20.0, connect=40.0)
+
     async with httpx.AsyncClient(
         timeout=timeout,
-        limits=limits) as client:
-        # text_column = TextColumn('{task.description}', table_column=Column(ratio=1))
-        # bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
-        # with Progress(
-        #     "[progress.percentage]{task.percentage:>3.0f}%",
-        #     text_column,
-        #     bar_column,
-        #     DownloadColumn(),
-        #     TransferSpeedColumn(),
-        # ) as progress:
-        files = await asyncio.gather(
-            *[cache_url(args, url, headers, client, None) for url in urls], return_exceptions=True
-        )
-        # await client.aclose()
+        limits=limits
+    ) as client:
+        text_column = TextColumn('{task.description}', table_column=Column(ratio=1))
+        bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
+        with Progress(
+            "[progress.percentage]{task.percentage:>3.0f}%",
+            text_column,
+            bar_column,
+            DownloadColumn(),
+            TransferSpeedColumn(),
+        ) as progress:
+            files = await asyncio.gather(
+                *[cache_url(args, url, headers, client, progress) for url in urls], return_exceptions=True
+            )
     return files
 
 
 async def cache_url(args, url, headers, client, progress):
-
-    output = None
     logging.info(f"fetching url '{url}'")
-    request = None
-    async with client.stream("GET", url, headers=headers, timeout=None) as response:
-        while "Content-Disposition" not in response.headers:
-            # if isinstance(request, httpx.Request):
-            #     await request.aclose()
-            request = response.next_request
-            if request is None:
-                break
-            response = await client.send(request, stream=True)
-        c = Content(response.headers, args=args)
-        if c.filename:
-            c.bytes.close()
-            async with aiofiles.open(c.filename, "wb") as f:
-                try:
-                    async for chunk in response.aiter_bytes():
-                        await f.write(chunk)
-                        # await f.flush()
-                except Exception as e:
-                    print(e)
-                    breakpoint()
-        else:
-            # pass
-            chunk_count = 0
+    request = client.build_request("GET", url, headers=headers, timeout=None)
+    logging.debug(f"{request} built")
+    response = await client.send(request, stream=True)
+    
+    logging.debug(f"Await response complete for {request}")
+    filename = None # placeholder
+    while response.next_request is not None:
+        extracted_filename = Content._extract_filename(response.headers)
+        filename = extracted_filename if extracted_filename is not None else filename
+        request = response.next_request
+        await response.aclose()
+        response = await client.send(request, stream=True)
+
+    logging.debug(f"Got final response from {url}")
+    c = Content(response.headers, filename=filename, args=args)
+    if args.progress:
+        total = None
+
+        # GRiD doesn't give us this
+        if response.headers.get('Content-length'):
+            total = int(response.headers.get('Content-length'))
+        name = c.target.name if isinstance(c.target, pathlib.Path) else "bytesIO"
+        download_task = progress.add_task(f"{name}", total=total)
+    chunk_count = 0
+    
+    logging.info(f"Downloading {url} to {c.target}")
+    if isinstance(c.target, BytesIO):
+        # do in-memory stuff
+        async for chunk in response.aiter_bytes():
+            _ = c.target.write(chunk)
+            chunk_count += 1
+
+            if args.progress:
+                num_bytes = response.num_bytes_downloaded
+                progress.update(download_task, completed=num_bytes)
+        c.target.flush()
+        c.target.seek(0)
+
+    else:
+        # we are writing to disk asyncronously
+        async with aiofiles.open(c.target, "wb+") as f:
             async for chunk in response.aiter_bytes():
-                c.bytes.write(chunk)
+                await f.write(chunk)
                 chunk_count += 1
 
-            c.bytes.flush()
-            c.bytes.seek(0)
-        # if args.progress:
-        #     total = None
+            if args.progress:
+                num_bytes = response.num_bytes_downloaded
+                progress.update(download_task, completed=num_bytes)
 
-        #     # GRiD doesn't give us this
-        #     if response.headers.get('Content-length'):
-        #         total = int(response.headers.get('Content-length'))
-        #     name = c.filename
-        #     if name:
-        #         name = c.filename.name  # just use basename
-        #     download_task = progress.add_task(f"{name}", total=total)
-        # if isinstance(request, httpx.Request):
-        #     await request.aclose()
-            # if args.progress:
-            #     num_bytes = response.num_bytes_downloaded
-            #     progress.update(download_task, completed=num_bytes)
+    logging.info(f"Downloading {url} complete")
 
-    # breakpoint()
-    output = c
-    return output
+    await response.aclose()
+    if args.progress:
+        num_bytes = response.num_bytes_downloaded
+        progress.update(download_task, completed=num_bytes)
+    return c

@@ -28,9 +28,7 @@ class Api:
         headers = {"Authorization": f"Bearer {self.args.token}"}
 
         files = asyncio.run(cacheFunction(self.args, urls, headers))
-
-        response = json.load(files[0].bytes)
-
+        response = json.load(files[0].target)
         if response.get('error'):
             raise RuntimeError(response['error'])
         return response["aois"]
