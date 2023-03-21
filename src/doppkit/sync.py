@@ -1,6 +1,5 @@
 import logging
 import asyncio
-import itertools
 
 from pathlib import Path
 
