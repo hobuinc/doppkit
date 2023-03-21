@@ -82,6 +82,7 @@ async def cache(args, urls, headers):
             bar_column,
             DownloadColumn(),
             TransferSpeedColumn(),
+            transient=True
         ) as progress:
             files = await asyncio.gather(
                 *[cache_url(args, url, headers, client, progress) for url in urls], return_exceptions=True
@@ -90,33 +91,26 @@ async def cache(args, urls, headers):
 
 
 async def cache_url(args, url, headers, client, progress):
-    logging.info(f"fetching url '{url}'")
     request = client.build_request("GET", url, headers=headers, timeout=None)
-    logging.debug(f"{request} built")
     response = await client.send(request, stream=True)
-    
-    logging.debug(f"Await response complete for {request}")
     filename = None # placeholder
+    total = max(0, int(response.headers.get('Content-length', 0))) 
+
     while response.next_request is not None:
         extracted_filename = Content._extract_filename(response.headers)
         filename = extracted_filename if extracted_filename is not None else filename
         request = response.next_request
         await response.aclose()
         response = await client.send(request, stream=True)
+        total = max(total, int(response.headers.get('Content-length', 0)))     
 
-    logging.debug(f"Got final response from {url}")
+
     c = Content(response.headers, filename=filename, args=args)
     if args.progress:
-        total = None
-
-        # GRiD doesn't give us this
-        if response.headers.get('Content-length'):
-            total = int(response.headers.get('Content-length'))
         name = c.target.name if isinstance(c.target, pathlib.Path) else "bytesIO"
         download_task = progress.add_task(f"{name}", total=total)
     chunk_count = 0
     
-    logging.info(f"Downloading {url} to {c.target}")
     if isinstance(c.target, BytesIO):
         # do in-memory stuff
         async for chunk in response.aiter_bytes():
@@ -124,8 +118,10 @@ async def cache_url(args, url, headers, client, progress):
             chunk_count += 1
 
             if args.progress:
-                num_bytes = response.num_bytes_downloaded
-                progress.update(download_task, completed=num_bytes)
+                progress.update(
+                    download_task,
+                    completed=response.num_bytes_downloaded
+                )
         c.target.flush()
         c.target.seek(0)
 
@@ -136,14 +132,10 @@ async def cache_url(args, url, headers, client, progress):
                 await f.write(chunk)
                 chunk_count += 1
 
-            if args.progress:
-                num_bytes = response.num_bytes_downloaded
-                progress.update(download_task, completed=num_bytes)
-
-    logging.info(f"Downloading {url} complete")
-
+                if args.progress:
+                    progress.update(
+                        download_task,
+                        completed=response.num_bytes_downloaded
+                    )
     await response.aclose()
-    if args.progress:
-        num_bytes = response.num_bytes_downloaded
-        progress.update(download_task, completed=num_bytes)
     return c
