@@ -9,6 +9,7 @@ aoi_endpoint_ext = "/api/v3/aois"
 export_endpoint_ext = "/api/v3/exports"
 task_endpoint_ext = "/api/v3/tasks"
 
+
 class Api:
     def __init__(self, args):
         self.args = args
@@ -23,12 +24,11 @@ class Api:
             url_args += "&export_full=true"
             aoi_endpoint = f"{self.args.url}{aoi_endpoint_ext}?{url_args}"
 
+        urls = (aoi_endpoint, )
         headers = {"Authorization": f"Bearer {self.args.token}"}
-        urls = [aoi_endpoint]
+
         files = asyncio.run(cacheFunction(self.args, urls, headers))
-
-        response = json.load(files[0].bytes)
-
+        response = json.load(files[0].target)
         if response.get('error'):
             raise RuntimeError(response['error'])
         return response["aois"]
