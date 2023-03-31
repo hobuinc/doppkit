@@ -150,6 +150,9 @@ async def cache_url(args, url, headers, client, progress):
                         progress.update(
                             download_task, completed=response.num_bytes_downloaded
                         )
+        if args.progress:
+            # we can hide the task now that it's finished
+            progress.update(download_task, visible=False)
         await response.aclose()
         if limit.locked():
             await asyncio.sleep(0.5)
