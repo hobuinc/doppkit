@@ -88,54 +88,69 @@ async def cache(args, urls, headers):
             TransferSpeedColumn(),
             transient=True,
         ) as progress:
+
             files = await asyncio.gather(
-                *[cache_url(args, url, headers, client, progress) for url in urls],
+                *[asyncio.create_task(
+                    cache_url(
+                        args,
+                        url,
+                        headers,
+                        client,
+                        progress,
+                    )
+                ) for url in urls],
                 return_exceptions=True,
             )
     return files
 
 
 async def cache_url(args, url, headers, client, progress):
-    request = client.build_request("GET", url, headers=headers, timeout=None)
-    response = await client.send(request, stream=True)
-    filename = None  # placeholder
-    total = max(0, int(response.headers.get("Content-length", 0)))
-
-    while response.next_request is not None:
-        extracted_filename = Content._extract_filename(response.headers)
-        filename = extracted_filename if extracted_filename is not None else filename
-        request = response.next_request
-        await response.aclose()
+    limit = args.limit
+    async with limit:
+        request = client.build_request("GET", url, headers=headers, timeout=None)
         response = await client.send(request, stream=True)
-        total = max(total, int(response.headers.get("Content-length", 0)))
 
-    c = Content(response.headers, filename=filename, args=args)
-    if args.progress:
-        name = c.target.name if isinstance(c.target, pathlib.Path) else "bytesIO"
-        download_task = progress.add_task(f"{name}", total=total)
-    chunk_count = 0
 
-    if isinstance(c.target, BytesIO):
-        # do in-memory stuff
-        async for chunk in response.aiter_bytes():
-            _ = c.target.write(chunk)
-            chunk_count += 1
+        filename = None  # placeholder
+        total = max(0, int(response.headers.get("Content-length", 0)))
 
-            if args.progress:
-                progress.update(download_task, completed=response.num_bytes_downloaded)
-        c.target.flush()
-        c.target.seek(0)
+        while response.next_request is not None:
+            extracted_filename = Content._extract_filename(response.headers)
+            filename = extracted_filename if extracted_filename is not None else filename
+            request = response.next_request
+            await response.aclose()
+            response = await client.send(request, stream=True)
+            total = max(total, int(response.headers.get("Content-length", 0)))
 
-    else:
-        # we are writing to disk asyncronously
-        async with aiofiles.open(c.target, "wb+") as f:
+        c = Content(response.headers, filename=filename, args=args)
+        if args.progress:
+            name = c.target.name if isinstance(c.target, pathlib.Path) else "bytesIO"
+            download_task = progress.add_task(f"{name}", total=total)
+        chunk_count = 0
+
+        if isinstance(c.target, BytesIO):
+            # do in-memory stuff
             async for chunk in response.aiter_bytes():
-                await f.write(chunk)
+                _ = c.target.write(chunk)
                 chunk_count += 1
 
                 if args.progress:
-                    progress.update(
-                        download_task, completed=response.num_bytes_downloaded
-                    )
-    await response.aclose()
+                    progress.update(download_task, completed=response.num_bytes_downloaded)
+            c.target.flush()
+            c.target.seek(0)
+
+        else:
+            # we are writing to disk asyncronously
+            async with aiofiles.open(c.target, "wb+") as f:
+                async for chunk in response.aiter_bytes():
+                    await f.write(chunk)
+                    chunk_count += 1
+
+                    if args.progress:
+                        progress.update(
+                            download_task, completed=response.num_bytes_downloaded
+                        )
+        await response.aclose()
+        if limit.locked():
+            await asyncio.sleep(0.5)
     return c

@@ -1,3 +1,4 @@
+import asyncio
 import click
 import logging
 import pathlib
@@ -7,7 +8,7 @@ from .list import listAOIs as listAOIsFunction
 from .list import listExports as listExportsFunction
 
 
-class Application(object):
+class Application:
     def __init__(self, token=None, url=None, log_level=logging.ERROR, threads=20):
         self.token = token
         self.url = url
@@ -15,6 +16,8 @@ class Application(object):
         self.threads = threads
         self.progress = False
         self.logging = logging
+        self.limit = asyncio.Semaphore(threads)
+
 
 @click.group()
 @click.option(
