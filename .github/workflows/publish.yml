@@ -37,12 +37,12 @@ jobs:
       - name: Setup up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: '3.10'
       - name: Make Executable
         run: |
           python -m pip install pyinstaller .
           pyinstaller --name doppkit \
-            --onfile \
+            --onefile \
             --console \
             --icon resources/grid-icon.ico \
             --hidden-import aiofiles \
