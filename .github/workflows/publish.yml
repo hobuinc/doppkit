@@ -55,5 +55,5 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            dist\doppkit-win64-cli.zip
-            dist\doppkit-win64-cli.exe
+            dist/doppkit-win64-cli.zip
+            dist/doppkit-win64-cli.exe
