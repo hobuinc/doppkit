@@ -38,21 +38,34 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - name: Get release
-        id: get_release
-        uses: bruceadams/get-release@v1.3.2
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
+#      - name: Get release
+#        id: get_release
+#        uses: bruceadams/get-release@v1.3.2
+#        env:
+#          GITHUB_TOKEN: ${{ github.token }}
       - name: Make Executable
+        shell: bash
         run: |
           python -m pip install pyinstaller .
-          pyinstaller --name doppkit --onefile --console --icon resources/grid-icon.ico --hidden-import aiofiles cli.py
+          pyinstaller --name doppkit-win64-cli \
+            --onefile \
+            --console \
+            --icon resources/grid-icon.ico \
+            --hidden-import aiofiles \
+            cli.py
+          "C:/Program Files/7-Zip/7z.exe" a dist/doppkit-win64-cli.exe dist/doppkit-win64-cli.zip
       - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v1
         with:
-          upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: ./dist/doppkit.exe
-          asset_name: doppkit.exe
-          asset_content_type: application/vnd.microsoft.portable-executable
+          files: |
+            dist\doppkit-win64-cli.zip
+            dist\doppkit-win64-cli.exe
+#      - name: Upload Release Asset
+#        uses: actions/upload-release-asset@v1
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#        with:
+#          upload_url: ${{ steps.get_release.outputs.upload_url }}
+#          asset_path: ./dist/doppkit.exe
+#          asset_name: doppkit.exe
+#          asset_content_type: application/zip
