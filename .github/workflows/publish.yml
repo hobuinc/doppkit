@@ -53,7 +53,8 @@ jobs:
             --icon resources/grid-icon.ico \
             --hidden-import aiofiles \
             cli.py
-          "C:/Program Files/7-Zip/7z.exe" a dist/doppkit-win64-cli.exe dist/doppkit-win64-cli.zip
+      - name: Zip Output
+        run: "C:/Program Files/7-Zip/7z.exe" a dist/doppkit-win64-cli.exe dist/doppkit-win64-cli.zip
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
         with:
