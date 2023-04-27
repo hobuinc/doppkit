@@ -35,8 +35,15 @@ class Application:
 @click.option("--log-level", default="INFO", help="Log level (INFO/DEBUG)")
 @click.option("--threads", default=20, type=int, help="Fetch thread count")
 @click.option("--progress", default=True, type=bool, help="Report download progress")
+@click.option(
+    "--disable-ssl-verification",
+    default=False,
+    is_flag=True,
+    type=bool,
+    help="Disable SSL verification of URLs",
+)
 @click.pass_context
-def cli(ctx, token, url, log_level, threads, progress):
+def cli(ctx, token, url, log_level, threads, progress, disable_ssl_verification):
 
     # Set up logging
     numeric_level = getattr(logging, log_level.upper(), None)
@@ -50,6 +57,7 @@ def cli(ctx, token, url, log_level, threads, progress):
     app = Application(token, url, log_level, threads)
     app.logging = logging
     app.progress = progress
+    app.disable_ssl_verification = disable_ssl_verification
 
     ctx.obj = app
 
@@ -65,6 +73,7 @@ def cli(ctx, token, url, log_level, threads, progress):
     type=bool,
     help="Overwrite existing fetches of the same name",
 )
+
 @click.option("--directory", help="Output directory to write", default="downloads", type=pathlib.Path)
 @click.option("--filter", help="AOI note filter query", default="")
 @click.argument("pk",)

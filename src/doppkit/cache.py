@@ -77,7 +77,7 @@ async def cache(args, urls, headers):
     )
     timeout = httpx.Timeout(20.0, connect=40.0)
 
-    async with httpx.AsyncClient(timeout=timeout, limits=limits) as client:
+    async with httpx.AsyncClient(timeout=timeout, limits=limits, verify=args.disable_ssl_verification) as client:
         text_column = TextColumn("{task.description}", table_column=Column(ratio=1))
         bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
         with Progress(
