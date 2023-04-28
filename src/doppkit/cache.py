@@ -77,7 +77,9 @@ async def cache(args, urls, headers):
     )
     timeout = httpx.Timeout(20.0, connect=40.0)
 
-    async with httpx.AsyncClient(timeout=timeout, limits=limits, verify=args.disable_ssl_verification) as client:
+    async with httpx.AsyncClient(
+        timeout=timeout, limits=limits, verify=not args.disable_ssl_verification
+    ) as client:
         text_column = TextColumn("{task.description}", table_column=Column(ratio=1))
         bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
         with Progress(
@@ -90,15 +92,18 @@ async def cache(args, urls, headers):
         ) as progress:
 
             files = await asyncio.gather(
-                *[asyncio.create_task(
-                    cache_url(
-                        args,
-                        url,
-                        headers,
-                        client,
-                        progress,
+                *[
+                    asyncio.create_task(
+                        cache_url(
+                            args,
+                            url,
+                            headers,
+                            client,
+                            progress,
+                        )
                     )
-                ) for url in urls],
+                    for url in urls
+                ],
                 return_exceptions=True,
             )
     return files
@@ -110,13 +115,14 @@ async def cache_url(args, url, headers, client, progress):
         request = client.build_request("GET", url, headers=headers, timeout=None)
         response = await client.send(request, stream=True)
 
-
         filename = None  # placeholder
         total = max(0, int(response.headers.get("Content-length", 0)))
 
         while response.next_request is not None:
             extracted_filename = Content._extract_filename(response.headers)
-            filename = extracted_filename if extracted_filename is not None else filename
+            filename = (
+                extracted_filename if extracted_filename is not None else filename
+            )
             request = response.next_request
             await response.aclose()
             response = await client.send(request, stream=True)
@@ -135,7 +141,9 @@ async def cache_url(args, url, headers, client, progress):
                 chunk_count += 1
 
                 if args.progress:
-                    progress.update(download_task, completed=response.num_bytes_downloaded)
+                    progress.update(
+                        download_task, completed=response.num_bytes_downloaded
+                    )
             c.target.flush()
             c.target.seek(0)
 
