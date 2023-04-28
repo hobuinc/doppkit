@@ -65,7 +65,7 @@ class Api:
         }
         headers = {"Authorization": f"Bearer {self.args.token}"}
 
-        async with httpx.AsyncClient(verify=self.args.disable_ssl_verification) as client:
+        async with httpx.AsyncClient(verify= not self.args.disable_ssl_verification) as client:
             r = await client.post(export_endpoint, headers=headers, data=params)
         return r
 
