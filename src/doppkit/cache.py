@@ -146,8 +146,11 @@ async def cache_url(args, url, headers, client, progress):
                     )
             c.target.flush()
             c.target.seek(0)
+        else:  # isinstance(c.target, pathlib.Path)
+            # create parent directory/directories if needed
+            if c.target.parent is not None:
+                c.target.parent.mkdir(parents=True, exis4t_ok=True)
 
-        else:
             # we are writing to disk asyncronously
             async with aiofiles.open(c.target, "wb+") as f:
                 async for chunk in response.aiter_bytes():
