@@ -5,7 +5,6 @@ requires-python = ">=3.9"
 license = { file="LICENSE" }
 description = "Tool to allow retrival of USACE GRiD data"
 dependencies = [
-    "werkzeug",
     "httpx",
     "rich",
     "click",
