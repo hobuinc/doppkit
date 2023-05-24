@@ -7,7 +7,7 @@ import httpx
 import asyncio
 
 from io import BytesIO
-from werkzeug import http
+from .util import parse_options_header
 from rich.table import Column
 from rich.progress import (
     DownloadColumn,
@@ -47,7 +47,7 @@ class Content:
             logging.debug(f"disposition '{disposition}'")
             if "attachment" in disposition.lower():
                 # grab Aioysius_PC_20200121.zip from 'attachment; filename="Aioysius_PC_20200121.zip"'
-                attachment = http.parse_options_header(headers["Content-Disposition"])
+                attachment = parse_options_header(headers["Content-Disposition"])
                 filename = pathlib.Path(attachment[1]["filename"])
             else:
                 filename = None
