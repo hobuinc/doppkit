@@ -133,7 +133,6 @@ async def cache_url(args, url, headers, client, progress):
             name = c.target.name if isinstance(c.target, pathlib.Path) else "bytesIO"
             download_task = progress.add_task(f"{name}", total=total)
         chunk_count = 0
-
         if isinstance(c.target, BytesIO):
             # do in-memory stuff
             async for chunk in response.aiter_bytes():
@@ -149,8 +148,7 @@ async def cache_url(args, url, headers, client, progress):
         else:  # isinstance(c.target, pathlib.Path)
             # create parent directory/directories if needed
             if c.target.parent is not None:
-                c.target.parent.mkdir(parents=True, exis4t_ok=True)
-
+                c.target.parent.mkdir(parents=True, exist_ok=True)
             # we are writing to disk asyncronously
             async with aiofiles.open(c.target, "wb+") as f:
                 async for chunk in response.aiter_bytes():
