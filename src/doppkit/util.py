@@ -1,6 +1,7 @@
 
-
-# stolen right from werkzeug
+# header parse code inherited from werkzeug
+# https://github.com/pallets/werkzeug/blob/76b049dd45fd072fb62a54bccc0e8d513b03f4d8/src/werkzeug/http.py
+# SPDX-License-Identifier: BSD-3-Clause
 
 import re
 
