@@ -5,6 +5,8 @@ from pathlib import Path
 from .cache import cache
 from .grid import Api
 
+import httpx
+
 
 def sync(args, pk):
     """The main function for our script."""

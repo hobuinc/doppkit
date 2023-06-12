@@ -26,6 +26,9 @@ maintainers = [
 homepage = "https://github.com/hobuinc/doppkit"
 repository = "https://github.com/hobuinc/doppkit"
 
+[project.optional-dependencies]
+GUI = ["qtpy", "PyQt6", "qasync"]
+
 [tool.setuptools]
 package-dir = {"" =  "src"}
 zip-safe = false

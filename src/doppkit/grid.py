@@ -6,7 +6,7 @@ import logging
 import httpx
 from typing import Optional, Iterable, TypedDict
 
-from .cache import cache as cacheFunction
+from doppkit.cache import cache
 
 aoi_endpoint_ext = "/api/v3/aois"
 export_endpoint_ext = "/api/v3/exports"

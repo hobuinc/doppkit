@@ -1,23 +1,15 @@
+__all__ = ["cache"]
+
 import aiofiles
 import contextlib
 import pathlib
 import logging
 import typing
-import httpx
 import asyncio
 
+import httpx
 from io import BytesIO
 from .util import parse_options_header
-from rich.table import Column
-from rich.progress import (
-    DownloadColumn,
-    Progress,
-    BarColumn,
-    TextColumn,
-    TransferSpeedColumn,
-)
-
-__all__ = ["cache"]
 
 
 class Content:
@@ -71,41 +63,42 @@ class Content:
     data = property(get_data)
 
 
-async def cache(args, urls, headers):
+async def cache(app: 'Application', urls, headers) -> list[str]:
     limits = httpx.Limits(
-        max_keepalive_connections=args.threads, max_connections=args.threads
+        max_keepalive_connections=app.threads, max_connections=app.threads
     )
     timeout = httpx.Timeout(20.0, connect=40.0)
 
     async with httpx.AsyncClient(
-        timeout=timeout, limits=limits, verify=not args.disable_ssl_verification
+        timeout=timeout, limits=limits, verify=not app.disable_ssl_verification
     ) as client:
-        text_column = TextColumn("{task.description}", table_column=Column(ratio=1))
-        bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
-        with Progress(
-            "[progress.percentage]{task.percentage:>3.0f}%",
-            text_column,
-            bar_column,
-            DownloadColumn(),
-            TransferSpeedColumn(),
-            transient=True,
-        ) as progress:
 
+        if app.run_method == "CLI":
+            from doppkit.rich import cache
+
+            files = await cache(app, urls, headers, client)
+
+        elif app.run_method == "GUI":
+            # put gui hooks here...
+            files = []
+        else:
+            # being called via API
             files = await asyncio.gather(
                 *[
                     asyncio.create_task(
                         cache_url(
-                            args,
+                            app,
                             url,
                             headers,
                             client,
-                            progress,
+                            progress=False
                         )
                     )
                     for url in urls
                 ],
-                return_exceptions=True,
+                return_exceptions=True
             )
+
     return files
 
 

@@ -2,6 +2,7 @@ import asyncio
 import click
 import logging
 import pathlib
+import os
 
 from .sync import sync as syncFunction
 from .list import listAOIs as listAOIsFunction
@@ -9,14 +10,55 @@ from .list import listExports as listExportsFunction
 
 
 class Application:
-    def __init__(self, token=None, url=None, log_level=logging.ERROR, threads=20):
-        self.token = token
+    def __init__(
+            self,
+            token: str=None,
+            url: str=None,
+            log_level=logging.ERROR,
+            run_method="API",
+            threads: int=20,
+            progress: bool = False,
+            disable_ssl_verification: bool = False
+        ) -> None:
+        """_summary_
+
+        Parameters
+        ----------
+        token : str, optional
+            GRiD token to use, if None, it will eventually error, by default None
+        url : str, optional
+            URL of the grid server to use, by default None
+        log_level : logging.Level, optional
+            Logging level to set doppkit application to, by default logging.ERROR
+        run_method : str, optional
+            how doppkit is being run, recognized options are CLI, GUI and API, by default "API"
+        threads : int, optional
+            Number of threads to use to download resources, by default 20
+        """
+        # self.token: str = os.getenv("GRID_ACCESS_TOKEN", token)
+        try:
+            self.token = token if token is not None else os.environ["GRID_ACCESS_TOKEN"]
+        except KeyError as e:
+            raise RuntimeError("GRiD Access Token Not Provided") from e
         self.url = url
-        self.log_level = log_level
         self.threads = threads
-        self.progress = False
-        self.logging = logging
+        self.progress = progress
         self.limit = asyncio.Semaphore(threads)
+
+        # can be run via console, API, or GUI
+        self.run_method = run_method
+
+        self.log_level = log_level
+        self.disable_ssl_verification = disable_ssl_verification
+    
+    def __repr__(self) -> str:
+        return (
+            "Doppkit Application\n"
+            f"GRid URL {self.url}\n"
+            f"URL: {self.url}\n"
+            f"Run Method: {self.run_method}\n"
+        )
+
 
 
 @click.group()
@@ -54,11 +96,14 @@ def cli(ctx, token, url, log_level, threads, progress, disable_ssl_verification)
     # Log program args
     logging.debug(f"Log level: {log_level}")
 
-    app = Application(token, url, log_level, threads)
-    app.logging = logging
-    app.progress = progress
-    app.disable_ssl_verification = disable_ssl_verification
-
+    app = Application(
+        token=token,
+        url=url,
+        log_level=log_level,
+        threads=threads,
+        run_method="CLI",
+        progress = progress
+    )
     ctx.obj = app
 
 
