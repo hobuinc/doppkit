@@ -11,7 +11,6 @@ import httpx
 from io import BytesIO
 from .util import parse_options_header
 
-
 class Content:
     def __init__(
         self, headers, filename: typing.Optional[pathlib.Path] = None, args=None
@@ -24,7 +23,7 @@ class Content:
 
         if isinstance(filename, pathlib.Path):
             with contextlib.suppress(AttributeError):
-                self.directory = args.directory
+                self.directory = pathlib.Path(args.directory)
                 filename = self.directory.joinpath(filename)
 
         self.target: typing.Union[BytesIO, pathlib.Path] = (
@@ -133,7 +132,7 @@ async def cache_url(args, url, headers, client, progress) -> Content:
             await response.aclose()
             response = await client.send(request, stream=True)
             total = max(total, int(response.headers.get("Content-length", 0)))
-
+        print(f"{filename}")
         c = Content(response.headers, filename=filename, args=args)
         if args.progress:
             name = c.target.name if isinstance(c.target, pathlib.Path) else "bytesIO"
@@ -154,6 +153,7 @@ async def cache_url(args, url, headers, client, progress) -> Content:
         else:  # isinstance(c.target, pathlib.Path)
             # create parent directory/directories if needed
             if c.target.parent is not None:
+                print(f"{c.target=}\t{type(c.target)=}")
                 c.target.parent.mkdir(parents=True, exist_ok=True)
             # we are writing to disk asyncronously
             async with aiofiles.open(c.target, "wb+") as f:

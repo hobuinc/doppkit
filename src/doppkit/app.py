@@ -6,8 +6,7 @@ import os
 import sys
 
 from .sync import sync as syncFunction
-from .list import listAOIs as listAOIsFunction
-from .list import listExports as listExportsFunction
+
 
 
 class Application:
@@ -19,7 +18,8 @@ class Application:
             run_method="API",
             threads: int=20,
             progress: bool = False,
-            disable_ssl_verification: bool = False
+            disable_ssl_verification: bool = False,
+            override: bool = False
         ) -> None:
         """_summary_
 
@@ -35,16 +35,16 @@ class Application:
             how doppkit is being run, recognized options are CLI, GUI and API, by default "API"
         threads : int, optional
             Number of threads to use to download resources, by default 20
+        override : bool, optional
+            Tells doppkit if the files should be overwritten
         """
         # self.token: str = os.getenv("GRID_ACCESS_TOKEN", token)
-        try:
-            self.token = token if token is not None else os.environ["GRID_ACCESS_TOKEN"]
-        except KeyError as e:
-            raise RuntimeError("GRiD Access Token Not Provided") from e
+        self.token = token if token is not None else os.getenv("GRID_ACCESS_TOKEN", "")
         self.url = url
         self.threads = threads
         self.progress = progress
         self.limit = asyncio.Semaphore(threads)
+        self.override = override
 
         # can be run via console, API, or GUI
         self.run_method = run_method
@@ -139,6 +139,8 @@ def sync(app, timeout, start_id, overwrite, directory, filter, pk):
 @click.option("--filter", help="AOI note filter query", default="")
 @click.pass_obj
 def listAOIs(app, filter):
+    from .rich.list import listAOIs as listAOIsFunction
+
     app.filter = filter
     listAOIsFunction(app)
 
@@ -147,6 +149,8 @@ def listAOIs(app, filter):
 @click.argument("pk",  nargs=1)
 @click.pass_obj
 def listExports(app, pk):
+    from .rich.list import listExports as listExportsFunction
+
     listExportsFunction(app, pk)
 
 
@@ -158,6 +162,7 @@ def gui():
 
     qApp = QtWidgets.QApplication(sys.argv)
     qApp.setApplicationName("doppkit")
+    qApp.setStyle("fusion")
 
     # breakpoint()
 

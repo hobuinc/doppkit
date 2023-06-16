@@ -1,8 +1,10 @@
 import os
 from doppkit import __version__
 from doppkit.grid import Api
+from doppkit import cache
 from qtpy import QtCore, QtGui, QtWidgets
 from typing import Optional, Union
+import asyncio
 
 
 class DirectoryValidator(QtGui.QValidator):
@@ -217,6 +219,7 @@ class Window(QtWidgets.QMainWindow):
         tokenLabel.setFont(labelFont)
         tokenLineEdit = QtWidgets.QLineEdit()
         tokenLineEdit.setEchoMode(QtWidgets.QLineEdit.EchoMode.PasswordEchoOnEdit)
+        tokenLineEdit.editingFinished.connect(self.tokenChanged)
         tokenLabel.setBuddy(tokenLineEdit)
 
         # AOI Widgets
@@ -254,6 +257,7 @@ class Window(QtWidgets.QMainWindow):
 
         buttonList = QtWidgets.QPushButton("List Exports")
         buttonList.clicked.connect(aoiLineEdit.editingFinished)
+        buttonList.clicked.connect(tokenLineEdit.editingFinished)
         # we connect using a queued connection to ensure that the AOILineEdit
         # registers the finished signal
         buttonList.clicked.connect(
@@ -261,7 +265,13 @@ class Window(QtWidgets.QMainWindow):
             QtCore.Qt.ConnectionType.QueuedConnection
         )
         buttonDownload = QtWidgets.QPushButton("Download Exports")
-
+        buttonDownload.clicked.connect(aoiLineEdit.editingFinished)
+        buttonDownload.clicked.connect(tokenLineEdit.editingFinished)
+        buttonDownload.clicked.connect(downloadLineEdit.editingFinished)
+        buttonDownload.clicked.connect(
+            self.listAOIs,
+            QtCore.Qt.ConnectionType.QueuedConnection
+        )
         grouping = {
             "aoi": (
                 aoiLabel,
@@ -318,19 +328,21 @@ class Window(QtWidgets.QMainWindow):
     
     def aoisChanged(self) -> None:
         self.AOIs = [int(aoi) for aoi in self.sender().text().split(",")]
+
+    def tokenChanged(self) -> None:
+        self.doppkit.token = self.sender().text().strip()
     
     def listAOIs(self) -> None:
+        download = self.sender().text().lower().startswith("download")
         api = Api(self.doppkit)
         if not self.AOIs:
             # we haven't entered an AOI here yet!
             return None
         self.sender().setEnabled(False)
-        try:
-            print("Querying GRiD...")
-            aois = api.get_aois(self.AOIs[0])
-        finally:
-            print("Query Finished")
-            self.sender().setEnabled(True)
+        
+        print("Querying GRiD...")
+        aois = api.get_aois(self.AOIs[0])
+
         displayData = {aoi["name"]: [export["name"] for export in aoi["exports"]] for aoi in aois}
 
         model = ExportModel()
@@ -340,3 +352,41 @@ class Window(QtWidgets.QMainWindow):
         self.exportView.resizeColumnToContents(0)
         self.exportView.show()
         self.exportView.setAlternatingRowColors(True)
+
+        if download:
+            exportfiles = []
+            for aoi in aois:
+                for export in aoi["exports"]:
+                    # logging.debug(f"export: {export}")
+                    files = api.get_exports(export['pk'])
+                    exportfiles.extend(files)
+
+            total_downloads = len(exportfiles)
+            count = 0
+            urls = []
+            # logging.info(f"{total_downloads} files found, downloading to dir: {download_dir}")
+            for exportfile in exportfiles:
+                pk = exportfile.get("pk")
+
+                filename = exportfile["name"]
+                download_url = exportfile["url"]
+                download_destination = os.path.join(self.doppkit.directory, filename)
+                print(f"{download_destination}")
+                # logging.debug(f"download destination: {download_destination}")
+                # logging.info(
+                #     f"Exportfile PK {pk} downloading from {download_url} to {download_destination}"
+                # )
+
+                # Skip this file if we've already downloaded it
+                if not self.doppkit.override and os.path.exists(download_destination):
+                    # logging.info(f"File already exists, skipping: {download_destination}")
+                    pass
+                else:
+                    urls.append(download_url)
+
+            headers = {"Authorization": f"Bearer {self.doppkit.token}"}
+            # logging.debug(urls, headers)
+
+            _ = asyncio.run(cache(self.doppkit, urls, headers))
+        self.sender().setEnabled(True)
+        print("all done)")
