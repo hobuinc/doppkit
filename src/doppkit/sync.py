@@ -8,7 +8,7 @@ from .grid import Api
 import httpx
 
 
-def sync(args, pk):
+def sync(args, pk: str):
     """The main function for our script."""
 
     # Create a directory into which our downloads will go

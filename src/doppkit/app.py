@@ -3,6 +3,7 @@ import click
 import logging
 import pathlib
 import os
+import sys
 
 from .sync import sync as syncFunction
 from .list import listAOIs as listAOIsFunction
@@ -50,6 +51,7 @@ class Application:
 
         self.log_level = log_level
         self.disable_ssl_verification = disable_ssl_verification
+        self.directory = os.fsdecode(pathlib.Path.home() / "Downloads")
     
     def __repr__(self) -> str:
         return (
@@ -146,3 +148,39 @@ def listAOIs(app, filter):
 @click.pass_obj
 def listExports(app, pk):
     listExportsFunction(app, pk)
+
+
+
+def gui():
+    from qtpy import QtCore, QtGui, QtWidgets
+    from doppkit.qt import Window
+    import importlib
+
+    qApp = QtWidgets.QApplication(sys.argv)
+    qApp.setApplicationName("doppkit")
+
+    # breakpoint()
+
+    icon = QtGui.QIcon(
+        os.path.join(
+            importlib.resources.files("doppkit.resources"),
+            'grid-icon.ico'
+        )
+    )
+
+    app = Application(
+        token=None,
+        url="https://grid.nga.mil/grid",
+        log_level=logging.INFO,
+        threads=5,
+        run_method="GUI",
+        progress = False
+    )
+
+
+    # breakpoint( )
+
+    qApp.setWindowIcon(icon)
+    window = Window(app)
+    window.setWindowIcon(icon)
+    sys.exit(qApp.exec_())

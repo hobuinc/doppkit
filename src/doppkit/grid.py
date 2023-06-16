@@ -80,6 +80,7 @@ class Api:
 
     def get_aois(self, pk: Optional[int]=None) -> list[AOI]:
         url_args = 'intersections=false&intersection_geoms=false'
+
         if pk:
             url_args += "&export_full=false&sort=pk"
             aoi_endpoint = f"{self.args.url}{aoi_endpoint_ext}/{pk}?{url_args}"

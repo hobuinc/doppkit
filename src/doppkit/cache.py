@@ -79,8 +79,22 @@ async def cache(app: 'Application', urls, headers) -> list[str]:
             files = await cache(app, urls, headers, client)
 
         elif app.run_method == "GUI":
-            # put gui hooks here...
-            files = []
+            # TODO: use GUI specific bits here.
+            files = await asyncio.gather(
+                *[
+                    asyncio.create_task(
+                        cache_url(
+                            app,
+                            url,
+                            headers,
+                            client,
+                            progress=False
+                        )
+                    )
+                    for url in urls
+                ],
+                return_exceptions=True
+            )
         else:
             # being called via API
             files = await asyncio.gather(
