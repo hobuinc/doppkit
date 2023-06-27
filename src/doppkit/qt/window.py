@@ -193,6 +193,8 @@ class Window(QtWidgets.QMainWindow):
         contents = QtWidgets.QWidget()
         self.setCentralWidget(contents)
 
+        settings = QtCore.QSettings()
+
         layout = QtWidgets.QVBoxLayout(contents)
 
         # URL Widgets
@@ -237,14 +239,10 @@ class Window(QtWidgets.QMainWindow):
         # Download Location
         downloadLabel = QtWidgets.QLabel("&Download Location")
         downloadLabel.setFont(labelFont)
-        downloadLineEdit = QtWidgets.QLineEdit(
-            QtCore.QStandardPaths.standardLocations(
-                QtCore.QStandardPaths.StandardLocation.DownloadLocation
-            )[0]
-        )
+        downloadLineEdit = QtWidgets.QLineEdit()
         downloadLabel.setBuddy(downloadLineEdit)
         downloadLineEdit.setValidator(DirectoryValidator())
-        downloadLineEdit.editingFinished.connect(self.downloadDirectoryChagned)
+        downloadLineEdit.editingFinished.connect(self.downloadDirectoryChanged)
 
         icons = QtWidgets.QFileIconProvider()
         downloadIcon = icons.icon(QtGui.QAbstractFileIconProvider.IconType.Folder)
@@ -301,8 +299,34 @@ class Window(QtWidgets.QMainWindow):
 
         layout.addLayout(buttonLayout)
 
+        # read window settings
+        settings.beginGroup("MainWindow")
+        geometry = settings.value("geometry", None)
+        if geometry is not None:
+           self.restoreGeometry(geometry)   
+        settings.endGroup()
+
+        # populate fields with previously stored values or defaults otherwise
+        tokenLineEdit.setText(settings.value("grid/token"))
+
+        urlLineComboBox.setEditText(settings.value("grid/url", "https://grid.nga.mil/grid"))
+        
+        downloadLineEdit.setText(
+            settings.value(
+                "grid/download",
+                QtCore.QStandardPaths.standardLocations(
+                    QtCore.QStandardPaths.StandardLocation.DownloadLocation
+                )[0]
+            )
+        )
         self.show()
     
+
+    def closeEvent(self, evt: QtGui.QCloseEvent) -> None:
+        settings = QtCore.QSettings()
+        settings.beginGroup("MainWindow")
+        settings.setValue("geometry", self.saveGeometry())
+        settings.endGroup()
 
     def showDownloadDialog(self, checked:bool = False):
         directory = QtWidgets.QFileDialog.getExistingDirectory(
@@ -321,16 +345,22 @@ class Window(QtWidgets.QMainWindow):
 
     def gridURLChanged(self):
         self.doppkit.url = QtCore.QUrl.fromUserInput(self.sender().currentText()).url()
-        # TODO: store value on disk
+        setting = QtCore.QSettings()
+        setting.setValue("grid/url", self.doppkit.url)
     
-    def downloadDirectoryChagned(self):
+    
+    def downloadDirectoryChanged(self):
         self.doppkit.directory = os.fsdecode(self.sender().text())
+        setting = QtCore.QSettings()
+        setting.setValue("grid/download", self.doppkit.directory)
     
     def aoisChanged(self) -> None:
         self.AOIs = [int(aoi) for aoi in self.sender().text().split(",")]
 
     def tokenChanged(self) -> None:
         self.doppkit.token = self.sender().text().strip()
+        setting = QtCore.QSettings()
+        setting.setValue("grid/token", self.doppkit.token)
     
     def listAOIs(self) -> None:
         download = self.sender().text().lower().startswith("download")

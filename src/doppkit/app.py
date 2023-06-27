@@ -162,6 +162,7 @@ def gui():
 
     qApp = QtWidgets.QApplication(sys.argv)
     qApp.setApplicationName("doppkit")
+    qApp.setOrganizationName("Hobu")
     qApp.setStyle("fusion")
 
     # breakpoint()
@@ -181,9 +182,6 @@ def gui():
         run_method="GUI",
         progress = False
     )
-
-
-    # breakpoint( )
 
     qApp.setWindowIcon(icon)
     window = Window(app)
