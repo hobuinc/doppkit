@@ -4,8 +4,9 @@ from doppkit.grid import Api
 from doppkit import cache
 from qtpy import QtCore, QtGui, QtWidgets
 from typing import Optional, Union
+import qasync
 import asyncio
-
+import sys
 
 class DirectoryValidator(QtGui.QValidator):
 
@@ -158,22 +159,6 @@ class ExportModel(QtCore.QAbstractItemModel):
     
     def clear(self) -> None:
          self.load({})
-
-
-# class ExportWindow(QtWidgets.QWidget):
-
-#     def __init__(self, parent: Optional[QtCore.QObject] = None) -> None:
-#         super().__init__(parent)
-#         self.view = QtWidgets.QTreeView(self)
-#         self.view.setAlternatingRowColors(True)
-#         # self.setCentralWidget(self.view)
-
-#         self.model = ExportModel()
-#         self.view.setModel(self.model)
-#         self.view.expandAll()
-#         return None
-        
-
 
 
 class Window(QtWidgets.QMainWindow):
@@ -361,17 +346,15 @@ class Window(QtWidgets.QMainWindow):
         self.doppkit.token = self.sender().text().strip()
         setting = QtCore.QSettings()
         setting.setValue("grid/token", self.doppkit.token)
-    
-    def listAOIs(self) -> None:
-        download = self.sender().text().lower().startswith("download")
+
+    async def fetchFromGrid(self, download: bool=False):
+        loop = qasync.QEventLoop(QtWidgets.QApplication.instance())
+        asyncio.set_event_loop(loop)
+        with loop:
+            loop.run_forever()
         api = Api(self.doppkit)
-        if not self.AOIs:
-            # we haven't entered an AOI here yet!
-            return None
-        self.sender().setEnabled(False)
-        
-        print("Querying GRiD...")
-        aois = api.get_aois(self.AOIs[0])
+
+        aois = await api.get_aois(self.AOIs[0])
 
         displayData = {aoi["name"]: [export["name"] for export in aoi["exports"]] for aoi in aois}
 
@@ -388,7 +371,7 @@ class Window(QtWidgets.QMainWindow):
             for aoi in aois:
                 for export in aoi["exports"]:
                     # logging.debug(f"export: {export}")
-                    files = api.get_exports(export['pk'])
+                    files = await api.get_exports(export['pk'])
                     exportfiles.extend(files)
 
             total_downloads = len(exportfiles)
@@ -402,10 +385,7 @@ class Window(QtWidgets.QMainWindow):
                 download_url = exportfile["url"]
                 download_destination = os.path.join(self.doppkit.directory, filename)
                 print(f"{download_destination}")
-                # logging.debug(f"download destination: {download_destination}")
-                # logging.info(
-                #     f"Exportfile PK {pk} downloading from {download_url} to {download_destination}"
-                # )
+
 
                 # Skip this file if we've already downloaded it
                 if not self.doppkit.override and os.path.exists(download_destination):
@@ -415,8 +395,82 @@ class Window(QtWidgets.QMainWindow):
                     urls.append(download_url)
 
             headers = {"Authorization": f"Bearer {self.doppkit.token}"}
+            await cache(self.doppkit, urls, headers)
             # logging.debug(urls, headers)
 
-            _ = asyncio.run(cache(self.doppkit, urls, headers))
+            # thank you @laomaiweng
+            # https://github.com/CabbageDevelopment/qasync/issues/68#issuecomment-1499299576
+
+
+
+
+    def listAOIs(self) -> None:
+        download = self.sender().text().lower().startswith("download")
+
+        if not self.AOIs:
+            # we haven't entered an AOI here yet!
+            return None
+        self.sender().setEnabled(False)
+        with qasync._set_event_loop_policy(qasync.DefaultQEventLoopPolicy()):
+            runner = asyncio.runners.Runner()
+            runner.run(self.fetchFromGrid(download))
+        # # if sys.version_info.major == 3 and sys.version_info.minor == 11:
+        #
+        #     # runner = asyncio.runners.Runner()
+        #     # print("Querying GRiD...")
+        #
+        #     # aois = await api.get_aois(self.AOIs[0], runner)
+        #
+        #     displayData = {aoi["name"]: [export["name"] for export in aoi["exports"]] for aoi in aois}
+        #
+        #     model = ExportModel()
+        #     self.exportView.setModel(model)
+        #     model.load(displayData)
+        #     self.exportView.expandAll()
+        #     self.exportView.resizeColumnToContents(0)
+        #     self.exportView.show()
+        #     self.exportView.setAlternatingRowColors(True)
+        #
+        #     if download:
+        #         exportfiles = []
+        #         for aoi in aois:
+        #             for export in aoi["exports"]:
+        #                 # logging.debug(f"export: {export}")
+        #                 files = await api.get_exports(export['pk'], runner)
+        #                 exportfiles.extend(files)
+        #
+        #         total_downloads = len(exportfiles)
+        #         count = 0
+        #         urls = []
+        #         # logging.info(f"{total_downloads} files found, downloading to dir: {download_dir}")
+        #         for exportfile in exportfiles:
+        #             pk = exportfile.get("pk")
+        #
+        #             filename = exportfile["name"]
+        #             download_url = exportfile["url"]
+        #             download_destination = os.path.join(self.doppkit.directory, filename)
+        #             print(f"{download_destination}")
+        #             # logging.debug(f"download destination: {download_destination}")
+        #             # logging.info(
+        #             #     f"Exportfile PK {pk} downloading from {download_url} to {download_destination}"
+        #             # )
+        #
+        #             # Skip this file if we've already downloaded it
+        #             if not self.doppkit.override and os.path.exists(download_destination):
+        #                 # logging.info(f"File already exists, skipping: {download_destination}")
+        #                 pass
+        #             else:
+        #                 urls.append(download_url)
+        #
+        #         headers = {"Authorization": f"Bearer {self.doppkit.token}"}
+        #         runner.run(cache(self.doppkit, urls, headers, runner))
+        #         # logging.debug(urls, headers)
+        #
+        #         # thank you @laomaiweng
+        #         # https://github.com/CabbageDevelopment/qasync/issues/68#issuecomment-1499299576
+        #
+        #
+        #         # _ = asyncio.run(cache(self.doppkit, urls, headers))
         self.sender().setEnabled(True)
         print("all done)")
+        runner.close()

@@ -80,7 +80,6 @@ class Api:
 
     def get_aois(self, pk: Optional[int]=None) -> list[AOI]:
         url_args = 'intersections=false&intersection_geoms=false'
-
         if pk:
             url_args += "&export_full=false&sort=pk"
             aoi_endpoint = f"{self.args.url}{aoi_endpoint_ext}/{pk}?{url_args}"
@@ -93,6 +92,7 @@ class Api:
         headers = {"Authorization": f"Bearer {self.args.token}"}
 
         files = asyncio.run(cacheFunction(self.args, urls, headers))
+
         try:
             response = json.load(files[0].target)
         except IndexError as e:
@@ -180,6 +180,7 @@ class Api:
 
 
     def get_exports(self, export_pk: int) -> list[Exportfile]:
+
 
         # grid.nga.mil/grid/api/v3/exports/56193?sort=pk&file_geoms=false
         export_endpoint = (

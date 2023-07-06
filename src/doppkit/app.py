@@ -3,7 +3,6 @@ import click
 import logging
 import pathlib
 import os
-import sys
 
 from .sync import sync as syncFunction
 
@@ -156,24 +155,7 @@ def listExports(app, pk):
 
 
 def gui():
-    from qtpy import QtCore, QtGui, QtWidgets
-    from doppkit.qt import Window
-    import importlib
-
-    qApp = QtWidgets.QApplication(sys.argv)
-    qApp.setApplicationName("doppkit")
-    qApp.setOrganizationName("Hobu")
-    qApp.setStyle("fusion")
-
-    # breakpoint()
-
-    icon = QtGui.QIcon(
-        os.path.join(
-            importlib.resources.files("doppkit.resources"),
-            'grid-icon.ico'
-        )
-    )
-
+    from doppkit import start_gui
     app = Application(
         token=None,
         url="https://grid.nga.mil/grid",
@@ -182,8 +164,4 @@ def gui():
         run_method="GUI",
         progress = False
     )
-
-    qApp.setWindowIcon(icon)
-    window = Window(app)
-    window.setWindowIcon(icon)
-    sys.exit(qApp.exec_())
+    start_gui(app)
