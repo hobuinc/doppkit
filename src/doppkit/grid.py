@@ -1,5 +1,8 @@
 import json
 import asyncio
+import warnings
+import logging
+
 import httpx
 from typing import Dict, Optional, Iterable, List, Union
 
@@ -13,6 +16,8 @@ task_endpoint_ext = "/api/v3/tasks"
 class Api:
     def __init__(self, args):
         self.args = args
+        # let's quiet down the HTTPX logger
+        logging.getLogger("httpx").setLevel(logging.WARNING)
 
     def get_aois(self, pk=None):
         url_args = 'intersections=true&intersection_geoms=false'
@@ -28,9 +33,18 @@ class Api:
         headers = {"Authorization": f"Bearer {self.args.token}"}
 
         files = asyncio.run(cacheFunction(self.args, urls, headers))
-        response = json.load(files[0].target)
-        if response.get('error'):
-            raise RuntimeError(response['error'])
+        try:
+            response = json.load(files[0].target)
+        except IndexError as e:
+            raise RuntimeError(f"GRiD returned no products for AOI {pk}") from e
+        except AttributeError as e:
+            if isinstance(files[0], Exception):
+                raise files[0] from e
+            else:
+                raise RuntimeError(f"Unexpected type {type(files[0])} returned from cacheFunction") from e
+        else:
+            if "error" in response:
+                raise RuntimeError(response['error'])
         return response["aois"]
 
 
@@ -84,17 +98,37 @@ class Api:
         return output
 
 
-    def get_exports(self, export_pk):
+    def get_exports(self, export_pk) -> list[str]:
 
         # grid.nga.mil/grid/api/v3/exports/56193?sort=pk&file_geoms=false
-        export_endpoint = f"{self.args.url}{export_endpoint_ext}/{export_pk}?sort=pk&file_geoms=false"
+        export_endpoint = (
+            f"{self.args.url}{export_endpoint_ext}/"
+            f"{export_pk}?sort=pk&file_geoms=false"
+        )
         headers = {"Authorization": f"Bearer {self.args.token}"}
         urls = [export_endpoint]
         files = asyncio.run(cacheFunction(self.args, urls, headers))
-        response = json.loads(files[0].data)
-
-        if response.get('error'):
-            return None
+        try:
+            response = json.load(files[0].target)
+        except IndexError:
+            warnings.warn(
+                f"Export: {export_pk} returned no export files to download",
+                stacklevel=2
+            )
+            return []
+        except AttributeError as e:
+            if isinstance(files[0], Exception):
+                raise files[0] from e
+            else:
+                raise RuntimeError(f"Cache Function returned unknown type {type(files[0])}")
+        else:
+            if "error" in response:
+                warnings.warn(
+                    f"Attempting to access {export_pk=} resulted in the following error "
+                    f"from GRiD: {response['error']}",
+                    stacklevel=2
+                )
+                return []
 
         exports = []
         for f in files:
