@@ -4,7 +4,7 @@ import warnings
 import logging
 
 import httpx
-from typing import Dict, Optional, Iterable, List, Union
+from typing import Optional, Iterable, TypedDict
 
 from .cache import cache as cacheFunction
 
@@ -13,13 +13,72 @@ export_endpoint_ext = "/api/v3/exports"
 task_endpoint_ext = "/api/v3/tasks"
 
 
+class Exportfile(TypedDict):
+    pk: int
+    name: str
+    datatype: str
+    filesize: int
+    aoi_coverage: float
+    geom: str
+    url: str
+
+class VectorProduct(TypedDict):
+    pk: int
+
+class RasterProduct(TypedDict):
+    pk: int
+
+class PointcloudProduct(TypedDict):
+    pk: int
+
+class MeshProduct(TypedDict):
+    pk: int
+
+
+class Export(TypedDict):
+    name: str
+    datatype: str
+    export_Type: str
+    exportfiles: list[Exportfile]
+    file_export_options: str
+    file_format_options: str
+    hsrs: Optional[str]
+    license_url: str
+    notes: str
+    percent_complete: str
+    pk: int
+    send_email: bool
+    started_at: str
+    status: str
+    task_id: str
+    total_size: int
+    url: str
+    user: str
+    vsrs: Optional[str]
+    zip_url: str
+
+class AOI(TypedDict):
+    pk: int
+    area: Optional[float]
+    name: str
+    notes: str
+    user: str
+    subscribed: bool
+    created_at: str
+    exports: list[Export]
+    raster_intersects: list[RasterProduct]
+    mesh_intersects: list[MeshProduct]
+    pointcloud_intersects: list[PointcloudProduct]
+    vector_intersects: list[VectorProduct]
+
+
 class Api:
     def __init__(self, args):
         self.args = args
         # let's quiet down the HTTPX logger
         logging.getLogger("httpx").setLevel(logging.WARNING)
 
-    def get_aois(self, pk=None):
+    def get_aois(self, pk: Optional[int]=None) -> list[AOI]:
         url_args = 'intersections=true&intersection_geoms=false'
         if pk:
             url_args += "&export_full=false&sort=pk"
@@ -41,14 +100,21 @@ class Api:
             if isinstance(files[0], Exception):
                 raise files[0] from e
             else:
-                raise RuntimeError(f"Unexpected type {type(files[0])} returned from cacheFunction") from e
+                raise TypeError(
+                    f"Unexpected type {type(files[0])} returned from cacheFunction"
+                ) from e
         else:
             if "error" in response:
                 raise RuntimeError(response['error'])
         return response["aois"]
 
 
-    async def make_exports(self, aoi: Dict[str, Union[int, str, List[Dict[str, Union[float, int, str]]]]], name: str, intersect_types:Optional[Iterable[str]]=None) -> httpx.Response:
+    async def make_exports(
+            self,
+            aoi: AOI,
+            name: str,
+            intersect_types:Optional[Iterable[str]]=None
+    ) -> httpx.Response:
         """
         Intersect types should be container that includes the combination of:
 
@@ -84,7 +150,7 @@ class Api:
         return r
 
 
-    def check_export(self, task_id=None):
+    def check_export(self, task_id : str = None):
         headers = {"Authorization": f"Bearer {self.args.token}"}
         task_endpoint = f"{self.args.url}{task_endpoint_ext}"
         if task_id is not None:
@@ -98,7 +164,7 @@ class Api:
         return output
 
 
-    def get_exports(self, export_pk) -> list[str]:
+    def get_exports(self, export_pk: int) -> list[Exportfile]:
 
         # grid.nga.mil/grid/api/v3/exports/56193?sort=pk&file_geoms=false
         export_endpoint = (
@@ -120,7 +186,9 @@ class Api:
             if isinstance(files[0], Exception):
                 raise files[0] from e
             else:
-                raise RuntimeError(f"Cache Function returned unknown type {type(files[0])}")
+                raise TypeError(
+                    f"Cache Function returned unknown type {type(files[0])}"
+                ) from e
         else:
             if "error" in response:
                 warnings.warn(

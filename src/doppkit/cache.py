@@ -109,7 +109,7 @@ async def cache(args, urls, headers):
     return files
 
 
-async def cache_url(args, url, headers, client, progress) -> list[Content]:
+async def cache_url(args, url, headers, client, progress) -> Content:
     limit = args.limit
     async with limit:
         request = client.build_request("GET", url, headers=headers, timeout=None)
