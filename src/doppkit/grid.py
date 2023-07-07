@@ -133,7 +133,20 @@ class Api:
 
         product_pks = []
         for intersection in intersect_types:
-            product_pks.extend([entry["pk"] for entry in aoi[f"{intersection}_intersects"]])
+            if intersection == "raster":
+                product_pks.extend([entry["pk"] for entry in aoi["raster_intersects"]])
+            elif intersection == "mesh":
+                product_pks.extend([entry["pk"] for entry in aoi["mesh_intersects"]])
+            elif intersection == "pointcloud":
+                product_pks.extend([entry["pk"] for entry in aoi["pointcloud_intersects"]])
+            elif intersection == "vector":
+                product_pks.extend([entry["pk"] for entry in aoi["vector_intersects"]])
+            else:
+                warnings.warn(
+                    f"Unknown intersect type {intersection}, needs to be one of "
+                    "raster, mesh, pointcloud, or vector.  Ignoring.",
+                    stacklevel=2
+                )
         export_endpoint = f"{self.args.url}{export_endpoint_ext}"
 
         # https://pro.arcgis.com/en/pro-app/2.9/arcpy/classes/spatialreference.htm

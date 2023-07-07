@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import re
+from urllib.parse import unquote
 
 # https://httpwg.org/specs/rfc9110.html#parameter
 _parameter_re = re.compile(
