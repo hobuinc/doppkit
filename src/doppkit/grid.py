@@ -79,7 +79,7 @@ class Api:
         logging.getLogger("httpx").setLevel(logging.WARNING)
 
     def get_aois(self, pk: Optional[int]=None) -> list[AOI]:
-        url_args = 'intersections=true&intersection_geoms=false'
+        url_args = 'intersections=false&intersection_geoms=false'
         if pk:
             url_args += "&export_full=false&sort=pk"
             aoi_endpoint = f"{self.args.url}{aoi_endpoint_ext}/{pk}?{url_args}"
@@ -125,7 +125,6 @@ class Api:
 
         defaults to all the above
         """
-
         if intersect_types is None:
             intersect_types = {"raster", "mesh", "pointcloud", "vector"}
         else:
@@ -154,7 +153,9 @@ class Api:
         params = {
             "aoi": str(aoi["pk"]),
             "products": ",".join(map(str, product_pks)),
-            "name": name
+            "name": name,
+            'intersections': True,
+            'intersection_geoms': False
         }
         headers = {"Authorization": f"Bearer {self.args.token}"}
 
