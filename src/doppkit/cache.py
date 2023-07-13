@@ -35,7 +35,7 @@ class Content:
                 self.directory = args.directory
                 filename = self.directory.joinpath(filename)
 
-        self.target: BytesIO | pathlib.Path = (
+        self.target: typing.Union[BytesIO, pathlib.Path] = (
             BytesIO() if filename is None else filename
         )
 
@@ -109,7 +109,7 @@ async def cache(args, urls, headers):
     return files
 
 
-async def cache_url(args, url, headers, client, progress):
+async def cache_url(args, url, headers, client, progress) -> Content:
     limit = args.limit
     async with limit:
         request = client.build_request("GET", url, headers=headers, timeout=None)
@@ -117,7 +117,6 @@ async def cache_url(args, url, headers, client, progress):
 
         filename = None  # placeholder
         total = max(0, int(response.headers.get("Content-length", 0)))
-
         while response.next_request is not None:
             extracted_filename = Content._extract_filename(response.headers)
             filename = (

@@ -1,6 +1,5 @@
 import logging
 import asyncio
-
 from pathlib import Path
 
 from .cache import cache
@@ -16,9 +15,7 @@ def sync(args, pk):
     download_dir.mkdir(exist_ok=True)
 
     api = Api(args)
-
     aois = api.get_aois(pk)
-
     if args.filter:
         logging.debug(f'Filtering AOIs with "{args.filter}"')
         aois = [aoi for aoi in aois if args.filter in aoi["notes"]]
@@ -33,7 +30,7 @@ def sync(args, pk):
     total_downloads = len(exportfiles)
     count = 0
     urls = []
-    logging.info(f"{total_downloads} files found, downloading to dir: {download_dir}")
+    logging.debug(f"{total_downloads} files found, downloading to dir: {download_dir}")
     for exportfile in sorted(exportfiles, key=lambda x: int(x.get("pk"))):
         pk = exportfile.get("pk")
         if pk < int(args.start_id):
@@ -44,14 +41,13 @@ def sync(args, pk):
         filename = exportfile["name"]
         download_url = exportfile["url"]
         download_destination = download_dir.joinpath(filename)
-        logging.debug(f"download destination: {download_destination}")
-        logging.info(
+        logging.debug(
             f"Exportfile PK {pk} downloading from {download_url} to {download_destination}"
         )
 
         # Skip this file if we've already downloaded it
         if not args.overwrite and download_destination.exists():
-            logging.info(f"File already exists, skipping: {download_destination}")
+            logging.debug(f"File already exists, skipping: {download_destination}")
         else:
             urls.append(download_url)
 

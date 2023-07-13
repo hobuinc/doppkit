@@ -1,7 +1,10 @@
 import json
 import asyncio
+import warnings
+import logging
+
 import httpx
-from typing import Dict, Optional, Iterable, List, Union
+from typing import Optional, Iterable, TypedDict
 
 from .cache import cache as cacheFunction
 
@@ -10,12 +13,73 @@ export_endpoint_ext = "/api/v3/exports"
 task_endpoint_ext = "/api/v3/tasks"
 
 
+class Exportfile(TypedDict):
+    pk: int
+    name: str
+    datatype: str
+    filesize: int
+    aoi_coverage: float
+    geom: str
+    url: str
+
+class VectorProduct(TypedDict):
+    pk: int
+
+class RasterProduct(TypedDict):
+    pk: int
+
+class PointcloudProduct(TypedDict):
+    pk: int
+
+class MeshProduct(TypedDict):
+    pk: int
+
+
+class Export(TypedDict):
+    name: str
+    datatype: str
+    export_Type: str
+    exportfiles: list[Exportfile]
+    file_export_options: str
+    file_format_options: str
+    hsrs: Optional[str]
+    license_url: str
+    notes: str
+    percent_complete: str
+    pk: int
+    send_email: bool
+    started_at: str
+    status: str
+    task_id: str
+    total_size: int
+    url: str
+    user: str
+    vsrs: Optional[str]
+    zip_url: str
+
+class AOI(TypedDict):
+    pk: int
+    area: Optional[float]
+    name: str
+    notes: str
+    user: str
+    subscribed: bool
+    created_at: str
+    exports: list[Export]
+    raster_intersects: list[RasterProduct]
+    mesh_intersects: list[MeshProduct]
+    pointcloud_intersects: list[PointcloudProduct]
+    vector_intersects: list[VectorProduct]
+
+
 class Api:
     def __init__(self, args):
         self.args = args
+        # let's quiet down the HTTPX logger
+        logging.getLogger("httpx").setLevel(logging.WARNING)
 
-    def get_aois(self, pk=None):
-        url_args = 'intersections=true&intersection_geoms=false'
+    def get_aois(self, pk: Optional[int]=None) -> list[AOI]:
+        url_args = 'intersections=false&intersection_geoms=false'
         if pk:
             url_args += "&export_full=false&sort=pk"
             aoi_endpoint = f"{self.args.url}{aoi_endpoint_ext}/{pk}?{url_args}"
@@ -28,13 +92,29 @@ class Api:
         headers = {"Authorization": f"Bearer {self.args.token}"}
 
         files = asyncio.run(cacheFunction(self.args, urls, headers))
-        response = json.load(files[0].target)
-        if response.get('error'):
-            raise RuntimeError(response['error'])
+        try:
+            response = json.load(files[0].target)
+        except IndexError as e:
+            raise RuntimeError(f"GRiD returned no products for AOI {pk}") from e
+        except AttributeError as e:
+            if isinstance(files[0], Exception):
+                raise files[0] from e
+            else:
+                raise TypeError(
+                    f"Unexpected type {type(files[0])} returned from cacheFunction"
+                ) from e
+        else:
+            if "error" in response:
+                raise RuntimeError(response['error'])
         return response["aois"]
 
 
-    async def make_exports(self, aoi: Dict[str, Union[int, str, List[Dict[str, Union[float, int, str]]]]], name: str, intersect_types:Optional[Iterable[str]]=None) -> httpx.Response:
+    async def make_exports(
+            self,
+            aoi: AOI,
+            name: str,
+            intersect_types:Optional[Iterable[str]]=None
+    ) -> httpx.Response:
         """
         Intersect types should be container that includes the combination of:
 
@@ -45,7 +125,6 @@ class Api:
 
         defaults to all the above
         """
-
         if intersect_types is None:
             intersect_types = {"raster", "mesh", "pointcloud", "vector"}
         else:
@@ -53,7 +132,20 @@ class Api:
 
         product_pks = []
         for intersection in intersect_types:
-            product_pks.extend([entry["pk"] for entry in aoi[f"{intersection}_intersects"]])
+            if intersection == "raster":
+                product_pks.extend([entry["pk"] for entry in aoi["raster_intersects"]])
+            elif intersection == "mesh":
+                product_pks.extend([entry["pk"] for entry in aoi["mesh_intersects"]])
+            elif intersection == "pointcloud":
+                product_pks.extend([entry["pk"] for entry in aoi["pointcloud_intersects"]])
+            elif intersection == "vector":
+                product_pks.extend([entry["pk"] for entry in aoi["vector_intersects"]])
+            else:
+                warnings.warn(
+                    f"Unknown intersect type {intersection}, needs to be one of "
+                    "raster, mesh, pointcloud, or vector.  Ignoring.",
+                    stacklevel=2
+                )
         export_endpoint = f"{self.args.url}{export_endpoint_ext}"
 
         # https://pro.arcgis.com/en/pro-app/2.9/arcpy/classes/spatialreference.htm
@@ -61,7 +153,9 @@ class Api:
         params = {
             "aoi": str(aoi["pk"]),
             "products": ",".join(map(str, product_pks)),
-            "name": name
+            "name": name,
+            'intersections': True,
+            'intersection_geoms': False
         }
         headers = {"Authorization": f"Bearer {self.args.token}"}
 
@@ -70,7 +164,7 @@ class Api:
         return r
 
 
-    def check_export(self, task_id=None):
+    def check_export(self, task_id : str = None):
         headers = {"Authorization": f"Bearer {self.args.token}"}
         task_endpoint = f"{self.args.url}{task_endpoint_ext}"
         if task_id is not None:
@@ -84,17 +178,39 @@ class Api:
         return output
 
 
-    def get_exports(self, export_pk):
+    def get_exports(self, export_pk: int) -> list[Exportfile]:
 
         # grid.nga.mil/grid/api/v3/exports/56193?sort=pk&file_geoms=false
-        export_endpoint = f"{self.args.url}{export_endpoint_ext}/{export_pk}?sort=pk&file_geoms=false"
+        export_endpoint = (
+            f"{self.args.url}{export_endpoint_ext}/"
+            f"{export_pk}?sort=pk&file_geoms=false"
+        )
         headers = {"Authorization": f"Bearer {self.args.token}"}
         urls = [export_endpoint]
         files = asyncio.run(cacheFunction(self.args, urls, headers))
-        response = json.loads(files[0].data)
-
-        if response.get('error'):
-            return None
+        try:
+            response = json.load(files[0].target)
+        except IndexError:
+            warnings.warn(
+                f"Export: {export_pk} returned no export files to download",
+                stacklevel=2
+            )
+            return []
+        except AttributeError as e:
+            if isinstance(files[0], Exception):
+                raise files[0] from e
+            else:
+                raise TypeError(
+                    f"Cache Function returned unknown type {type(files[0])}"
+                ) from e
+        else:
+            if "error" in response:
+                warnings.warn(
+                    f"Attempting to access {export_pk=} resulted in the following error "
+                    f"from GRiD: {response['error']}",
+                    stacklevel=2
+                )
+                return []
 
         exports = []
         for f in files:
