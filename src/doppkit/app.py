@@ -131,7 +131,7 @@ def sync(app, timeout, start_id, overwrite, directory, filter, pk):
     app.directory = directory
     app.filter = filter
     app.pk = pk
-    syncFunction(app, pk)
+    asyncio.run(syncFunction(app, pk))
 
 
 @cli.command('list-aois')
@@ -139,7 +139,6 @@ def sync(app, timeout, start_id, overwrite, directory, filter, pk):
 @click.pass_obj
 def listAOIs(app, filter):
     from .rich.list import listAOIs as listAOIsFunction
-
     app.filter = filter
     listAOIsFunction(app)
 
@@ -149,19 +148,4 @@ def listAOIs(app, filter):
 @click.pass_obj
 def listExports(app, pk):
     from .rich.list import listExports as listExportsFunction
-
     listExportsFunction(app, pk)
-
-
-
-def gui():
-    from doppkit import start_gui
-    app = Application(
-        token=None,
-        url="https://grid.nga.mil/grid",
-        log_level=logging.INFO,
-        threads=5,
-        run_method="GUI",
-        progress = False
-    )
-    start_gui(app)

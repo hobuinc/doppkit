@@ -1,14 +1,11 @@
 import logging
-import asyncio
 from pathlib import Path
 
 from .cache import cache
-from .grid import Api
-
-import httpx
+from .grid import Grid
 
 
-def sync(args, pk: str):
+async def sync(args, pk: str):
     """The main function for our script."""
 
     # Create a directory into which our downloads will go
@@ -16,19 +13,17 @@ def sync(args, pk: str):
     logging.debug(f"download directory: {args.directory}")
     download_dir.mkdir(exist_ok=True)
 
-    api = Api(args)
-    aois = api.get_aois(pk)
+    api = Grid(args)
+    aois = await api.get_aois(int(pk))
     if args.filter:
         logging.debug(f'Filtering AOIs with "{args.filter}"')
         aois = [aoi for aoi in aois if args.filter in aoi["notes"]]
-
     exportfiles = []
     for aoi in aois:
         for export in aoi["exports"]:
             logging.debug(f"export: {export}")
-            files = api.get_exports(export['pk'])
+            files = await api.get_exports(export['pk'])
             exportfiles.extend(files)
-
     total_downloads = len(exportfiles)
     count = 0
     urls = []
@@ -52,8 +47,7 @@ def sync(args, pk: str):
             logging.debug(f"File already exists, skipping: {download_destination}")
         else:
             urls.append(download_url)
-
     headers = {"Authorization": f"Bearer {args.token}"}
     logging.debug(urls, headers)
 
-    _ = asyncio.run(cache(args, urls, headers))
+    _ = await cache(args, urls, headers)

@@ -1,12 +1,14 @@
 import os
-from doppkit import __version__
-from doppkit.grid import Api
-from doppkit import cache
+from .. import __version__
+from ..grid import Grid, AOI, Exportfile, Export
+from ..cache import cache
 from qtpy import QtCore, QtGui, QtWidgets
-from typing import Optional, Union
+from typing import Optional
+import pathlib
+import logging
 import qasync
-import asyncio
-import sys
+
+from .ExportView import ExportModel
 
 class DirectoryValidator(QtGui.QValidator):
 
@@ -15,7 +17,7 @@ class DirectoryValidator(QtGui.QValidator):
             state = QtGui.QValidator.State.Acceptable
         else:
             state = QtGui.QValidator.State.Intermediate
-        return (state, input_, pos)
+        return state, input_, pos
     
 class URLValidator(QtGui.QValidator):
 
@@ -29,136 +31,14 @@ class URLValidator(QtGui.QValidator):
         return (state, input_, pos)
 
 
-
-    
-
 class TreeView(QtWidgets.QTreeView):
 
     def __init__(self, parent: Optional[QtCore.QObject] = None) -> None:
         super().__init__(parent)
-        return None
 
 
-class AOIItem:
-
-    def __init__(self, parent: Optional['AOIItem'] = None, name: str = "") -> None:
-        super().__init__()
-        self._parentItem: Optional['AOIItem'] = parent
-        self.childItems: list['AOIItem'] = []    
-        self.name = name
-
-    def appendChild(self, item: 'AOIItem') -> None:
-        self.childItems.append(item)
-    
-    def child(self, row: int) -> Optional['AOIItem']:
-        try:
-            return self.childItems[row]
-        except IndexError:
-            return None
-
-    def childCount(self) -> int:
-        return len(self.childItems)
-
-    def row(self) -> int:
-        return 0 if self.parentItem() is None else self.parentItem().childItems.index(self)
-    
-    def parentItem(self) -> Optional['AOIItem']:
-        return self._parentItem
-    
-    def __repr__(self):
-        return f"{self.name=}\t{self.childItems=}"
-
-    @classmethod
-    def load(
-        cls,
-        value: Union[list[str], dict[str, list[str]], str],
-        parent: Optional['AOIItem'] = None
-    ) -> 'AOIItem':
-        rootItem = AOIItem(parent)
-        rootItem.name = "root"
-        if isinstance(value, dict):    
-            for aoi_name, exports in value.items():
-                child = cls.load(exports, rootItem)
-                child.name = aoi_name
-                rootItem.appendChild(child)
-        elif isinstance(value, list):
-            for export in value:
-                child = cls.load(export, rootItem)
-                child.name = export
-                rootItem.appendChild(child)
-        else:
-            rootItem.name = value
-        return rootItem
 
 
-class ExportModel(QtCore.QAbstractItemModel):
-
-    def __init__(self, parent: Optional[QtCore.QObject] = None) -> None:
-
-        super().__init__(parent)
-        self.rootItem = AOIItem()
-
-        return None
-
-    def index(self, row: int, column: int, parent: QtCore.QModelIndex = QtCore.QModelIndex()) -> QtCore.QModelIndex:
-        if not parent.isValid():
-            parentItem = self.rootItem
-        else:
-            parentItem = parent.internalPointer()
-        
-        childItem = parentItem.child(row)
-        if childItem is None:
-            return QtCore.QModelIndex()
-        return self.createIndex(row, column, childItem)
-
-    def parent(self, index: QtCore.QModelIndex) -> QtCore.QModelIndex:
-        if not index.isValid():
-            return QtCore.QModelIndex()
-        
-        childItem = index.internalPointer()
-        parentItem = childItem.parentItem()
-        if parentItem == self.rootItem:
-            return QtCore.QModelIndex()
-        
-        return self.createIndex(parentItem.row(), 0, parentItem)
-    
-    def rowCount(self, parent: QtCore.QModelIndex = QtCore.QModelIndex()) -> int:
-        if parent.column() > 0:
-            return 0
-        if not parent.isValid():
-            parentItem = self.rootItem
-        else:
-            parentItem = parent.internalPointer()
-        
-        return parentItem.childCount()
-        
-
-    def columnCount(self, parent: QtCore.QModelIndex = QtCore.QModelIndex()) -> int:
-        return 1
-
-    def data(self, index: QtCore.QModelIndex, role=QtCore.Qt.ItemDataRole.DisplayRole) -> Optional[str]:
-        if not index.isValid():
-            print("Got invalid index, returning None")
-            return None
-
-        item = index.internalPointer()
-
-        if role == QtCore.Qt.ItemDataRole.DisplayRole:
-            if index.column() == 0:
-                return item.name
-
-    def headerData(self, section: int, orientation: QtCore.Qt.Orientation, role: QtCore.Qt.ItemDataRole) -> str:
-        if orientation == QtCore.Qt.Orientation.Horizontal and role == QtCore.Qt.ItemDataRole.DisplayRole:
-            return self.rootItem.data(section)
-        return ""
-
-    def load(self, data: dict[str, list[str]]) -> None:
-        self.beginResetModel()
-        self.rootItem = AOIItem.load(data)
-        self.endResetModel()            
-    
-    def clear(self) -> None:
-         self.load({})
 
 
 class Window(QtWidgets.QMainWindow):
@@ -169,7 +49,8 @@ class Window(QtWidgets.QMainWindow):
         self.setGeometry(300, 300, 300, 220)
         self.setWindowTitle(f"doppkit - {__version__}")
         self.doppkit = doppkit_application
-        self.AOIs: list[int] = []
+        self.AOI_pks: list[int] = []
+        self.AOIs: list[AOI] = []  # populated from GRiD
 
         self.exportView = TreeView()
         self.exportView.header().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Interactive)
@@ -198,7 +79,7 @@ class Window(QtWidgets.QMainWindow):
         urlLineComboBox.currentTextChanged.connect(self.gridURLChanged)
         urlLabel.setFont(labelFont)
         urlLabel.setBuddy(urlLineComboBox)
-        urlValidator = URLValidator()
+        urlValidator = URLValidator(parent=None)
         urlLineComboBox.setValidator(urlValidator)
 
         # Token Widgets
@@ -215,7 +96,7 @@ class Window(QtWidgets.QMainWindow):
         aoiLineEdit = QtWidgets.QLineEdit()
 
         # TODO: don't use IntValidator, should accept coma separated values
-        aoiValidator = QtGui.QIntValidator()
+        aoiValidator = QtGui.QIntValidator(parent=None, bottom=0)
         aoiValidator.setBottom(0)
         aoiLineEdit.setValidator(aoiValidator)
         aoiLineEdit.editingFinished.connect(self.aoisChanged)
@@ -226,7 +107,7 @@ class Window(QtWidgets.QMainWindow):
         downloadLabel.setFont(labelFont)
         downloadLineEdit = QtWidgets.QLineEdit()
         downloadLabel.setBuddy(downloadLineEdit)
-        downloadLineEdit.setValidator(DirectoryValidator())
+        downloadLineEdit.setValidator(DirectoryValidator(parent=None))
         downloadLineEdit.editingFinished.connect(self.downloadDirectoryChanged)
 
         icons = QtWidgets.QFileIconProvider()
@@ -244,7 +125,7 @@ class Window(QtWidgets.QMainWindow):
         # we connect using a queued connection to ensure that the AOILineEdit
         # registers the finished signal
         buttonList.clicked.connect(
-            self.listAOIs,
+            self.listExports,
             QtCore.Qt.ConnectionType.QueuedConnection
         )
         buttonDownload = QtWidgets.QPushButton("Download Exports")
@@ -252,7 +133,7 @@ class Window(QtWidgets.QMainWindow):
         buttonDownload.clicked.connect(tokenLineEdit.editingFinished)
         buttonDownload.clicked.connect(downloadLineEdit.editingFinished)
         buttonDownload.clicked.connect(
-            self.listAOIs,
+            self.downloadExports,
             QtCore.Qt.ConnectionType.QueuedConnection
         )
         grouping = {
@@ -288,20 +169,22 @@ class Window(QtWidgets.QMainWindow):
         settings.beginGroup("MainWindow")
         geometry = settings.value("geometry", None)
         if geometry is not None:
-           self.restoreGeometry(geometry)   
+           self.restoreGeometry(geometry)
         settings.endGroup()
 
         # populate fields with previously stored values or defaults otherwise
         tokenLineEdit.setText(settings.value("grid/token"))
 
-        urlLineComboBox.setEditText(settings.value("grid/url", "https://grid.nga.mil/grid"))
+        urlLineComboBox.setEditText(str(settings.value("grid/url", "https://grid.nga.mil/grid")))
         
         downloadLineEdit.setText(
-            settings.value(
-                "grid/download",
-                QtCore.QStandardPaths.standardLocations(
-                    QtCore.QStandardPaths.StandardLocation.DownloadLocation
-                )[0]
+            str(
+                settings.value(
+                    "grid/download",
+                    QtCore.QStandardPaths.standardLocations(
+                        QtCore.QStandardPaths.StandardLocation.DownloadLocation
+                    )[0]
+                )
             )
         )
         self.show()
@@ -332,31 +215,29 @@ class Window(QtWidgets.QMainWindow):
         self.doppkit.url = QtCore.QUrl.fromUserInput(self.sender().currentText()).url()
         setting = QtCore.QSettings()
         setting.setValue("grid/url", self.doppkit.url)
-    
-    
+
     def downloadDirectoryChanged(self):
         self.doppkit.directory = os.fsdecode(self.sender().text())
         setting = QtCore.QSettings()
         setting.setValue("grid/download", self.doppkit.directory)
     
     def aoisChanged(self) -> None:
-        self.AOIs = [int(aoi) for aoi in self.sender().text().split(",")]
+        self.AOI_pks = [int(aoi) for aoi in self.sender().text().split(",")]
 
     def tokenChanged(self) -> None:
         self.doppkit.token = self.sender().text().strip()
         setting = QtCore.QSettings()
         setting.setValue("grid/token", self.doppkit.token)
 
-    async def fetchFromGrid(self, download: bool=False):
-        loop = qasync.QEventLoop(QtWidgets.QApplication.instance())
-        asyncio.set_event_loop(loop)
-        with loop:
-            loop.run_forever()
-        api = Api(self.doppkit)
+    @qasync.asyncSlot()
+    async def listExports(self):
+        # TODO: this should accept a list of AOIs
+        # get AOI objects from GRiD
+        api = Grid(self.doppkit)
+        self.AOIs = await api.get_aois(self.AOI_pks[0])
 
-        aois = await api.get_aois(self.AOIs[0])
-
-        displayData = {aoi["name"]: [export["name"] for export in aoi["exports"]] for aoi in aois}
+        # we now know enough to render the display data
+        displayData = {aoi["name"]: [export["name"] for export in aoi["exports"]] for aoi in self.AOIs}
 
         model = ExportModel()
         self.exportView.setModel(model)
@@ -366,111 +247,39 @@ class Window(QtWidgets.QMainWindow):
         self.exportView.show()
         self.exportView.setAlternatingRowColors(True)
 
-        if download:
-            exportfiles = []
-            for aoi in aois:
-                for export in aoi["exports"]:
-                    # logging.debug(f"export: {export}")
-                    files = await api.get_exports(export['pk'])
-                    exportfiles.extend(files)
+    @qasync.asyncSlot()
+    async def downloadExports(self):
+        self.listExports()
 
-            total_downloads = len(exportfiles)
-            count = 0
-            urls = []
-            # logging.info(f"{total_downloads} files found, downloading to dir: {download_dir}")
-            for exportfile in exportfiles:
-                pk = exportfile.get("pk")
+        api = Grid(self.doppkit)
+        # now we get information to each exportfile
+        export_files = []
+        for aoi in self.AOIs:
+            for export in aoi["exports"]:
+                # TODO: this doesn't force ordering does it?
+                export_files.extend(await api.get_exports(export["pk"]))
+                # TODO: compute total export file-size download
 
-                filename = exportfile["name"]
-                download_url = exportfile["url"]
-                download_destination = os.path.join(self.doppkit.directory, filename)
-                print(f"{download_destination}")
+        download_dir = pathlib.Path(self.doppkit.directory)
+        download_dir.mkdir(exist_ok=True)
 
+        urls = []
+        for export_file in export_files:
+            filename = export_file["name"]
+            download_url = export_file["url"]
+            size = export_file.get("filesize", 0)
 
-                # Skip this file if we've already downloaded it
-                if not self.doppkit.override and os.path.exists(download_destination):
-                    # logging.info(f"File already exists, skipping: {download_destination}")
-                    pass
-                else:
-                    urls.append(download_url)
+            download_destination = download_dir.joinpath(filename)
+            # TODO: compare with filesize attribute
+            if not self.doppkit.override and download_destination.exists():
+                logging.debug(f"File already exists, skipping {filename}")
+            else:
+                urls.append(download_url)
 
-            headers = {"Authorization": f"Bearer {self.doppkit.token}"}
-            await cache(self.doppkit, urls, headers)
-            # logging.debug(urls, headers)
+        print(f"URLs to download: {urls}")
+        headers = {
+            "Authorization": f"Bearer {self.doppkit.token}"
+        }
+        _  = await cache(self.doppkit, urls, headers)
 
-            # thank you @laomaiweng
-            # https://github.com/CabbageDevelopment/qasync/issues/68#issuecomment-1499299576
-
-
-
-
-    def listAOIs(self) -> None:
-        download = self.sender().text().lower().startswith("download")
-
-        if not self.AOIs:
-            # we haven't entered an AOI here yet!
-            return None
-        self.sender().setEnabled(False)
-        with qasync._set_event_loop_policy(qasync.DefaultQEventLoopPolicy()):
-            runner = asyncio.runners.Runner()
-            runner.run(self.fetchFromGrid(download))
-        # # if sys.version_info.major == 3 and sys.version_info.minor == 11:
-        #
-        #     # runner = asyncio.runners.Runner()
-        #     # print("Querying GRiD...")
-        #
-        #     # aois = await api.get_aois(self.AOIs[0], runner)
-        #
-        #     displayData = {aoi["name"]: [export["name"] for export in aoi["exports"]] for aoi in aois}
-        #
-        #     model = ExportModel()
-        #     self.exportView.setModel(model)
-        #     model.load(displayData)
-        #     self.exportView.expandAll()
-        #     self.exportView.resizeColumnToContents(0)
-        #     self.exportView.show()
-        #     self.exportView.setAlternatingRowColors(True)
-        #
-        #     if download:
-        #         exportfiles = []
-        #         for aoi in aois:
-        #             for export in aoi["exports"]:
-        #                 # logging.debug(f"export: {export}")
-        #                 files = await api.get_exports(export['pk'], runner)
-        #                 exportfiles.extend(files)
-        #
-        #         total_downloads = len(exportfiles)
-        #         count = 0
-        #         urls = []
-        #         # logging.info(f"{total_downloads} files found, downloading to dir: {download_dir}")
-        #         for exportfile in exportfiles:
-        #             pk = exportfile.get("pk")
-        #
-        #             filename = exportfile["name"]
-        #             download_url = exportfile["url"]
-        #             download_destination = os.path.join(self.doppkit.directory, filename)
-        #             print(f"{download_destination}")
-        #             # logging.debug(f"download destination: {download_destination}")
-        #             # logging.info(
-        #             #     f"Exportfile PK {pk} downloading from {download_url} to {download_destination}"
-        #             # )
-        #
-        #             # Skip this file if we've already downloaded it
-        #             if not self.doppkit.override and os.path.exists(download_destination):
-        #                 # logging.info(f"File already exists, skipping: {download_destination}")
-        #                 pass
-        #             else:
-        #                 urls.append(download_url)
-        #
-        #         headers = {"Authorization": f"Bearer {self.doppkit.token}"}
-        #         runner.run(cache(self.doppkit, urls, headers, runner))
-        #         # logging.debug(urls, headers)
-        #
-        #         # thank you @laomaiweng
-        #         # https://github.com/CabbageDevelopment/qasync/issues/68#issuecomment-1499299576
-        #
-        #
-        #         # _ = asyncio.run(cache(self.doppkit, urls, headers))
-        self.sender().setEnabled(True)
-        print("all done)")
-        runner.close()
+        print("All Done!!!")

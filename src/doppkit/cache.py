@@ -1,20 +1,19 @@
-__all__ = ["cache"]
+__all__ = ["Content", "Progress", "cache", "cache_url"]
 
 import aiofiles
 import contextlib
 import pathlib
 import logging
-import typing
 import asyncio
 
 import httpx
 from io import BytesIO
 from .util import parse_options_header
 
-from typing import Protocol, Optional, TYPE_CHECKING
+from typing import Protocol, Optional, TYPE_CHECKING, Union, Iterable
 
 if TYPE_CHECKING:
-    from doppkit import Application
+    from .app import Application
 
 class Progress(Protocol):
 
@@ -29,7 +28,7 @@ class Progress(Protocol):
 
 class Content:
     def __init__(
-        self, headers, filename: typing.Optional[pathlib.Path] = None, args=None
+        self, headers, filename: Optional[pathlib.Path] = None, args=None
     ):
         self.directory = None
         self.headers = headers
@@ -42,12 +41,12 @@ class Content:
                 self.directory = pathlib.Path(args.directory)
                 filename = self.directory.joinpath(filename)
 
-        self.target: typing.Union[BytesIO, pathlib.Path] = (
+        self.target: Union[BytesIO, pathlib.Path] = (
             BytesIO() if filename is None else filename
         )
 
     @classmethod
-    def _extract_filename(cls, headers) -> typing.Optional[pathlib.Path]:
+    def _extract_filename(cls, headers) -> Optional[pathlib.Path]:
         filename = None
         if "content-disposition" in [key.lower() for key in headers.keys()]:
             disposition = headers["Content-Disposition"]
@@ -78,7 +77,7 @@ class Content:
     data = property(get_data)
 
 
-async def cache(app: 'Application', urls, headers, runner: Optional[asyncio.Runner]=None) -> list[str]:
+async def cache(app: 'Application', urls: Iterable[str], headers) -> list[Content]:
     limits = httpx.Limits(
         max_keepalive_connections=app.threads, max_connections=app.threads
     )
@@ -87,23 +86,47 @@ async def cache(app: 'Application', urls, headers, runner: Optional[asyncio.Runn
     async with httpx.AsyncClient(
         timeout=timeout, limits=limits, verify=not app.disable_ssl_verification
     ) as client:
-
-        if app.run_method == "CLI":
-            from doppkit.rich.cache import cache as cache_method
-        elif app.run_method == "GUI":
-            from doppkit.qt.cache import cache as cache_method
+        if app.progress:
+            if app.run_method == "CLI":
+                from .rich.cache import cache as cache_method
+            elif app.run_method == "GUI":
+                from .qt.cache import cache as cache_method
+            else:
+                # via API calls no great way to send updates
+                app.progress = False
+                cache_method = cache_generic
         else:
-            # via API calls no great way to send updates
-            # TODO: doesn't iterate over all URLs
-            app.progress = False 
-            cache_method = cache_url
-
+            cache_method = cache_generic
         files = await cache_method(app, urls, headers, client)
 
     return files
 
 
-async def cache_url(args, url, headers, client, progress: Optional[Progress]) -> Content:
+async def cache_generic(app: 'Application', urls: Iterable[str], headers, client: httpx.AsyncClient) -> list[Union[Content, Exception]]:
+    files = await asyncio.gather(
+        *[
+            asyncio.create_task(
+                cache_url(
+                    app,
+                    url,
+                    headers,
+                    client
+                )
+            )
+            for url in urls
+        ],
+        return_exceptions=True
+    )
+    return files
+
+
+async def cache_url(
+        args,
+        url: str,
+        headers,
+        client: httpx.AsyncClient,
+        progress: Optional[Progress] = None
+) -> Content:
     limit = args.limit
     async with limit:
         request = client.build_request("GET", url, headers=headers, timeout=None)
@@ -121,9 +144,9 @@ async def cache_url(args, url, headers, client, progress: Optional[Progress]) ->
             response = await client.send(request, stream=True)
             total = max(total, int(response.headers.get("Content-length", 0)))
         c = Content(response.headers, filename=filename, args=args)
-        if args.progress:
+        if args.progress and progress is not None:
             name = c.target.name if isinstance(c.target, pathlib.Path) else "bytesIO"
-            progress.add_task(f"{name}", total=total)
+            progress.create_task(f"{name}", total=total)
         chunk_count = 0
         if isinstance(c.target, BytesIO):
             # do in-memory stuff
@@ -131,7 +154,7 @@ async def cache_url(args, url, headers, client, progress: Optional[Progress]) ->
                 _ = c.target.write(chunk)
                 chunk_count += 1
 
-                if args.progress:
+                if args.progress and progress is not None:
                     progress.update(
                         name, completed=response.num_bytes_downloaded
                     )
@@ -141,17 +164,17 @@ async def cache_url(args, url, headers, client, progress: Optional[Progress]) ->
             # create parent directory/directories if needed
             if c.target.parent is not None:
                 c.target.parent.mkdir(parents=True, exist_ok=True)
-            # we are writing to disk asyncronously
+            # we are writing to disk asynchronously
             async with aiofiles.open(c.target, "wb+") as f:
                 async for chunk in response.aiter_bytes():
                     await f.write(chunk)
                     chunk_count += 1
 
-                    if args.progress:
+                    if args.progress and progress is not None:
                         progress.update(
                             name, completed=response.num_bytes_downloaded
                         )
-        if args.progress:
+        if args.progress and progress is not None:
             # we can hide the task now that it's finished
             progress.complete_task(name)
         await response.aclose()
