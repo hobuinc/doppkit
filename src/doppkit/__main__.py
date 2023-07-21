@@ -1,7 +1,2 @@
 from .app import cli
-
-
-def main():
-    """The main function for our script."""
-
-    cli()
+from .qt.__main__ import main as gui

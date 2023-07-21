@@ -1,5 +1,6 @@
 
-from .grid import Api
+import asyncio
+from ..grid import Grid
 from rich.console import Console
 from rich.table import Table
 
@@ -7,8 +8,8 @@ from rich.table import Table
 def listAOIs(args):
     """List AOIs and Exports for a given user token"""
 
-    api = Api(args)
-    aois = api.get_aois()
+    api = Grid(args)
+    aois = asyncio.run(api.get_aois())
 
     console = Console()
     table = Table(title='AOIs')
@@ -28,10 +29,11 @@ def listAOIs(args):
 def listExports(args, pk):
     """List Exports for a given AOI PK"""
 
-    api = Api(args)
+    api = Grid(args)
 
-    aoi = api.get_aois(pk=pk)[0]
+    aois = asyncio.run(api.get_aois(pk=pk))
 
+    aoi = aois[0]
     console = Console()
     table = Table(title=f"Exports for {aoi['name']} – {pk}")
 
@@ -43,7 +45,7 @@ def listExports(args, pk):
     if aoi.get('exports'):
         for export in aoi['exports']:
             export_pk = export['pk']
-            exports = api.get_exports(export_pk)
+            exports =  asyncio.run(api.get_exports(export_pk))
             for e in exports:
                 table.add_row(
                     str(export_pk),

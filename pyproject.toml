@@ -26,9 +26,16 @@ maintainers = [
 homepage = "https://github.com/hobuinc/doppkit"
 repository = "https://github.com/hobuinc/doppkit"
 
-[tool.setuptools]
-package-dir = {"" =  "src"}
-zip-safe = false
+[project.optional-dependencies]
+GUI = ["qtpy", "PySide6-essentials", "qasync"]
+
+
+[tool.setuptools.package-dir]
+doppkit = "src/doppkit"
+# "doppkit.resources" = "resources"
+
+[tool.setuptools.package-data]
+doppkit = ["*.ico"]
 
 [tool.setuptools.dynamic]
 version = { attr = "doppkit.__version__" }
@@ -39,4 +46,5 @@ requires = ["setuptools>=64.0"]
 build-backend = "setuptools.build_meta"
 
 [project.scripts]
-doppkit = "doppkit.__main__:main"
+doppkit = "doppkit.__main__:cli"
+doppkit-gui = "doppkit.__main__:gui"

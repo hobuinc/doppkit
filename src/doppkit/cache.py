@@ -1,28 +1,34 @@
+__all__ = ["Content", "Progress", "cache", "cache_url"]
+
 import aiofiles
 import contextlib
 import pathlib
 import logging
-import typing
-import httpx
 import asyncio
 
+import httpx
 from io import BytesIO
 from .util import parse_options_header
-from rich.table import Column
-from rich.progress import (
-    DownloadColumn,
-    Progress,
-    BarColumn,
-    TextColumn,
-    TransferSpeedColumn,
-)
 
-__all__ = ["cache"]
+from typing import Protocol, Optional, TYPE_CHECKING, Union, Iterable
 
+if TYPE_CHECKING:
+    from .app import Application
+
+class Progress(Protocol):
+
+    def update(self, name: str, completed: int) -> None:
+        ...
+
+    def create_task(self, name: str, total: int) -> None:
+        ...
+    
+    def complete_task(self, name: str) -> None:
+        ...
 
 class Content:
     def __init__(
-        self, headers, filename: typing.Optional[pathlib.Path] = None, args=None
+        self, headers, filename: Optional[pathlib.Path] = None, args=None
     ):
         self.directory = None
         self.headers = headers
@@ -32,15 +38,15 @@ class Content:
 
         if isinstance(filename, pathlib.Path):
             with contextlib.suppress(AttributeError):
-                self.directory = args.directory
+                self.directory = pathlib.Path(args.directory)
                 filename = self.directory.joinpath(filename)
 
-        self.target: typing.Union[BytesIO, pathlib.Path] = (
+        self.target: Union[BytesIO, pathlib.Path] = (
             BytesIO() if filename is None else filename
         )
 
     @classmethod
-    def _extract_filename(cls, headers) -> typing.Optional[pathlib.Path]:
+    def _extract_filename(cls, headers) -> Optional[pathlib.Path]:
         filename = None
         if "content-disposition" in [key.lower() for key in headers.keys()]:
             disposition = headers["Content-Disposition"]
@@ -71,45 +77,41 @@ class Content:
     data = property(get_data)
 
 
-async def cache(args, urls, headers):
+
+async def cache(app: 'Application', urls: Iterable[str], headers, progress: Optional[Progress]=None) -> list[Union[Content, Exception]]:
     limits = httpx.Limits(
-        max_keepalive_connections=args.threads, max_connections=args.threads
+        max_keepalive_connections=app.threads, max_connections=app.threads
     )
     timeout = httpx.Timeout(20.0, connect=40.0)
 
     async with httpx.AsyncClient(
-        timeout=timeout, limits=limits, verify=not args.disable_ssl_verification
+        timeout=timeout, limits=limits, verify=not app.disable_ssl_verification
     ) as client:
-        text_column = TextColumn("{task.description}", table_column=Column(ratio=1))
-        bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
-        with Progress(
-            "[progress.percentage]{task.percentage:>3.0f}%",
-            text_column,
-            bar_column,
-            DownloadColumn(),
-            TransferSpeedColumn(),
-            transient=True,
-        ) as progress:
-
-            files = await asyncio.gather(
-                *[
-                    asyncio.create_task(
-                        cache_url(
-                            args,
-                            url,
-                            headers,
-                            client,
-                            progress,
-                        )
+        files = await asyncio.gather(
+            *[
+                asyncio.create_task(
+                    cache_url(
+                        app,
+                        url,
+                        headers,
+                        client,
+                        progress=progress
                     )
-                    for url in urls
-                ],
-                return_exceptions=True,
-            )
+                )
+                for url in urls
+            ],
+            return_exceptions=True
+        )
     return files
 
 
-async def cache_url(args, url, headers, client, progress) -> Content:
+async def cache_url(
+        args,
+        url: str,
+        headers,
+        client: httpx.AsyncClient,
+        progress: Optional[Progress] = None
+) -> Content:
     limit = args.limit
     async with limit:
         request = client.build_request("GET", url, headers=headers, timeout=None)
@@ -126,11 +128,10 @@ async def cache_url(args, url, headers, client, progress) -> Content:
             await response.aclose()
             response = await client.send(request, stream=True)
             total = max(total, int(response.headers.get("Content-length", 0)))
-
         c = Content(response.headers, filename=filename, args=args)
-        if args.progress:
+        if args.progress and progress is not None:
             name = c.target.name if isinstance(c.target, pathlib.Path) else "bytesIO"
-            download_task = progress.add_task(f"{name}", total=total)
+            progress.create_task(f"{name}", total=total)
         chunk_count = 0
         if isinstance(c.target, BytesIO):
             # do in-memory stuff
@@ -138,9 +139,9 @@ async def cache_url(args, url, headers, client, progress) -> Content:
                 _ = c.target.write(chunk)
                 chunk_count += 1
 
-                if args.progress:
+                if args.progress and progress is not None:
                     progress.update(
-                        download_task, completed=response.num_bytes_downloaded
+                        name, completed=response.num_bytes_downloaded
                     )
             c.target.flush()
             c.target.seek(0)
@@ -148,19 +149,19 @@ async def cache_url(args, url, headers, client, progress) -> Content:
             # create parent directory/directories if needed
             if c.target.parent is not None:
                 c.target.parent.mkdir(parents=True, exist_ok=True)
-            # we are writing to disk asyncronously
+            # we are writing to disk asynchronously
             async with aiofiles.open(c.target, "wb+") as f:
                 async for chunk in response.aiter_bytes():
                     await f.write(chunk)
                     chunk_count += 1
 
-                    if args.progress:
+                    if args.progress and progress is not None:
                         progress.update(
-                            download_task, completed=response.num_bytes_downloaded
+                            name, completed=response.num_bytes_downloaded
                         )
-        if args.progress:
+        if args.progress and progress is not None:
             # we can hide the task now that it's finished
-            progress.update(download_task, visible=False)
+            progress.complete_task(name)
         await response.aclose()
         if limit.locked():
             await asyncio.sleep(0.5)

@@ -1,16 +1,23 @@
+__all__ = ["Grid", "Exportfile", "Export", "AOI"]
+
 import json
-import asyncio
 import warnings
 import logging
 
 import httpx
 from typing import Optional, Iterable, TypedDict
 
-from .cache import cache as cacheFunction
+from .cache import cache
+
 
 aoi_endpoint_ext = "/api/v3/aois"
 export_endpoint_ext = "/api/v3/exports"
 task_endpoint_ext = "/api/v3/tasks"
+
+
+class ExportStarted(TypedDict):
+    export_id: str
+    task_id: str
 
 
 class Exportfile(TypedDict):
@@ -21,6 +28,7 @@ class Exportfile(TypedDict):
     aoi_coverage: float
     geom: str
     url: str
+
 
 class VectorProduct(TypedDict):
     pk: int
@@ -33,6 +41,14 @@ class PointcloudProduct(TypedDict):
 
 class MeshProduct(TypedDict):
     pk: int
+
+
+class Task(TypedDict):
+    name: str
+    object_id: int
+    state: str
+    task_id: int
+    time_stamp: str
 
 
 class Export(TypedDict):
@@ -57,6 +73,7 @@ class Export(TypedDict):
     vsrs: Optional[str]
     zip_url: str
 
+
 class AOI(TypedDict):
     pk: int
     area: Optional[float]
@@ -72,13 +89,13 @@ class AOI(TypedDict):
     vector_intersects: list[VectorProduct]
 
 
-class Api:
+class Grid:
     def __init__(self, args):
         self.args = args
         # let's quiet down the HTTPX logger
         logging.getLogger("httpx").setLevel(logging.WARNING)
 
-    def get_aois(self, pk: Optional[int]=None) -> list[AOI]:
+    async def get_aois(self, pk: Optional[int]=None) -> list[AOI]:
         url_args = 'intersections=false&intersection_geoms=false'
         if pk:
             url_args += "&export_full=false&sort=pk"
@@ -91,7 +108,8 @@ class Api:
         urls = (aoi_endpoint, )
         headers = {"Authorization": f"Bearer {self.args.token}"}
 
-        files = asyncio.run(cacheFunction(self.args, urls, headers))
+        files = await cache(self.args, urls, headers)
+
         try:
             response = json.load(files[0].target)
         except IndexError as e:
@@ -101,7 +119,7 @@ class Api:
                 raise files[0] from e
             else:
                 raise TypeError(
-                    f"Unexpected type {type(files[0])} returned from cacheFunction"
+                    f"Unexpected type {type(files[0])} returned from cache"
                 ) from e
         else:
             if "error" in response:
@@ -114,7 +132,7 @@ class Api:
             aoi: AOI,
             name: str,
             intersect_types:Optional[Iterable[str]]=None
-    ) -> httpx.Response:
+    ) -> list[ExportStarted]:
         """
         Intersect types should be container that includes the combination of:
 
@@ -159,27 +177,44 @@ class Api:
         }
         headers = {"Authorization": f"Bearer {self.args.token}"}
 
-        async with httpx.AsyncClient(verify= not self.args.disable_ssl_verification) as client:
+        async with httpx.AsyncClient(verify=not self.args.disable_ssl_verification) as client:
             r = await client.post(export_endpoint, headers=headers, data=params)
-        return r
 
+        if r.status_code != httpx.codes.OK:
+            raise RuntimeError(f"GRiD Returned an Error: {r.json()['error']}")
+        return r.json()["exports"]
 
-    def check_export(self, task_id : str = None):
+    async def check_task(self, task_id: Optional[str] = None) -> list[Task]:
         headers = {"Authorization": f"Bearer {self.args.token}"}
         task_endpoint = f"{self.args.url}{task_endpoint_ext}"
         if task_id is not None:
             task_endpoint += f"/{task_id}"
         params = {"sort": "task_id"}
-        r = httpx.get(task_endpoint, headers=headers, params=params)
+
+        async with httpx.AsyncClient(verify=not self.args.disable_ssl_verification) as client:
+            r = await client.get(task_endpoint, headers=headers, params=params)
+
         if r.status_code == httpx.codes.OK:
             output = r.json()["tasks"]
         else:
-            raise RuntimeError
+            raise RuntimeError(f"GRiD Taskpoint Endpoint Returned Error {r.status_code}")
         return output
 
 
-    def get_exports(self, export_pk: int) -> list[Exportfile]:
+    async def get_exports(self, export_pk: int) -> list[Exportfile]:
+        """
+        Parameters
+        ----------
+        export_pk
+            Export PK to get a list of Exportfiles for
 
+
+        Returns
+        -------
+        list of Exportfile
+
+
+        """
         # grid.nga.mil/grid/api/v3/exports/56193?sort=pk&file_geoms=false
         export_endpoint = (
             f"{self.args.url}{export_endpoint_ext}/"
@@ -187,9 +222,9 @@ class Api:
         )
         headers = {"Authorization": f"Bearer {self.args.token}"}
         urls = [export_endpoint]
-        files = asyncio.run(cacheFunction(self.args, urls, headers))
+        export_files = await cache(self.args, urls, headers)
         try:
-            response = json.load(files[0].target)
+            response = json.load(export_files[0].target)
         except IndexError:
             warnings.warn(
                 f"Export: {export_pk} returned no export files to download",
@@ -197,11 +232,11 @@ class Api:
             )
             return []
         except AttributeError as e:
-            if isinstance(files[0], Exception):
-                raise files[0] from e
+            if isinstance(export_files[0], Exception):
+                raise export_files[0] from e
             else:
                 raise TypeError(
-                    f"Cache Function returned unknown type {type(files[0])}"
+                    f"Cache Function returned unknown type {type(export_files[0])}"
                 ) from e
         else:
             if "error" in response:
@@ -213,7 +248,7 @@ class Api:
                 return []
 
         exports = []
-        for f in files:
+        for f in export_files:
             j = json.loads(f.data)
             exports.append(j)
 
@@ -224,25 +259,4 @@ class Api:
                 output.extend(iter(item['exportfiles']))
         return output
 
-    async def get_exports_async(self, export_pk):
-        # # grid.nga.mil/grid/api/v3/exports/56193?sort=pk&file_geoms=false
-        # export_endpoint = f"{self.args.url}{export_endpoint_ext}/{export_pk}?sort=pk&file_geoms=false"
-        # headers = {"Authorization": f"Bearer {self.args.token}"}
-        # urls = [export_endpoint]
-        # files = asyncio.run(cacheFunction(self.args, urls, headers))
-        # response = json.loads(files[0].data)
-        # if response.get('error'):
-        #     return None
-        #
-        # exports = []
-        # async for f in files:
-        #     j = json.loads(f.data)
-        #     exports.append(j)
-        #
-        # output = []
-        # for e in exports:
-        #     ex = e['exports']
-        #     for item in ex:
-        #         output.extend(iter(item['exportfiles']))
-        # return output
-        raise NotImplementedError
+
