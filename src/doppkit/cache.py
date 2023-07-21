@@ -9,6 +9,7 @@ import asyncio
 import httpx
 from io import BytesIO
 from .util import parse_options_header
+from . import __version__
 
 from typing import Protocol, Optional, TYPE_CHECKING, Union, Iterable
 
@@ -78,12 +79,17 @@ class Content:
 
 
 
-async def cache(app: 'Application', urls: Iterable[str], headers, progress: Optional[Progress]=None) -> list[Union[Content, Exception]]:
+async def cache(
+        app: 'Application',
+        urls: Iterable[str],
+        headers: dict[str, str],
+        progress: Optional[Progress]=None
+) -> list[Union[Content, Exception]]:
     limits = httpx.Limits(
         max_keepalive_connections=app.threads, max_connections=app.threads
     )
     timeout = httpx.Timeout(20.0, connect=40.0)
-
+    headers['user-agent'] = f"doppkit/{__version__}/{app.run_method}"
     async with httpx.AsyncClient(
         timeout=timeout, limits=limits, verify=not app.disable_ssl_verification
     ) as client:
@@ -108,7 +114,7 @@ async def cache(app: 'Application', urls: Iterable[str], headers, progress: Opti
 async def cache_url(
         args,
         url: str,
-        headers,
+        headers: dict[str, str],
         client: httpx.AsyncClient,
         progress: Optional[Progress] = None
 ) -> Content:
