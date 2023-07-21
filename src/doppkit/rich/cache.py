@@ -1,6 +1,4 @@
-import asyncio
-from typing import Iterable
-import httpx
+from typing import Iterable, Union, TYPE_CHECKING
 from rich.table import Column
 from rich.progress import (
     DownloadColumn,
@@ -11,12 +9,15 @@ from rich.progress import (
     TaskID
 )
 
-from ..cache import cache_url
+from ..cache import cache as cache_generic
+if TYPE_CHECKING:
+    from ..app import Application
+    from ..cache import Content
 
 
 class RichProgress:
     
-    def __init__(self, context_manager):
+    def __init__(self, context_manager: Progress):
         self.context_manager = context_manager
         self.tasks: dict[str, TaskID] = {}
 
@@ -27,13 +28,13 @@ class RichProgress:
         task = self.tasks[name]
         self.context_manager.update(task, completed=completed)
     
-    def complete_task(self, name):
+    def complete_task(self, name: str):
         task = self.tasks[name]
         self.context_manager.update(task, visible=False)
         del self.tasks[name]
 
 
-async def cache(args, urls: Iterable[str], headers, client: httpx.AsyncClient):
+async def cache(app: 'Application', urls: Iterable[str], headers) -> list[Union[Exception, 'Content']]:
 
     text_column = TextColumn("{task.description}", table_column=Column(ratio=1))
     bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
@@ -47,20 +48,6 @@ async def cache(args, urls: Iterable[str], headers, client: httpx.AsyncClient):
     ) as progress:
 
         rich_progress = RichProgress(progress)
-        files = await asyncio.gather(
-            *[
-                asyncio.create_task(
-                    cache_url(
-                        args,
-                        url,
-                        headers,
-                        client,
-                        progress=rich_progress
-                    )
-                )
-                for url in urls
-            ],
-            return_exceptions=True
-        )
+        files = await cache_generic(app, urls, headers, progress=rich_progress)
 
     return files

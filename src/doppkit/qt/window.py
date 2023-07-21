@@ -1,7 +1,7 @@
 import os
 from .. import __version__
 from ..grid import Grid, AOI, Exportfile, Export
-from ..cache import cache
+from .cache import cache
 from qtpy import QtCore, QtGui, QtWidgets
 from typing import Optional
 import pathlib

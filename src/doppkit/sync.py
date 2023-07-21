@@ -1,8 +1,8 @@
 import logging
 from pathlib import Path
 
-from .cache import cache
 from .grid import Grid
+from .rich.cache import cache
 
 
 async def sync(args, pk: str):

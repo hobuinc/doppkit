@@ -77,7 +77,8 @@ class Content:
     data = property(get_data)
 
 
-async def cache(app: 'Application', urls: Iterable[str], headers) -> list[Content]:
+
+async def cache(app: 'Application', urls: Iterable[str], headers, progress: Optional[Progress]=None) -> list[Union[Content, Exception]]:
     limits = httpx.Limits(
         max_keepalive_connections=app.threads, max_connections=app.threads
     )
@@ -86,37 +87,21 @@ async def cache(app: 'Application', urls: Iterable[str], headers) -> list[Conten
     async with httpx.AsyncClient(
         timeout=timeout, limits=limits, verify=not app.disable_ssl_verification
     ) as client:
-        if app.progress:
-            if app.run_method == "CLI":
-                from .rich.cache import cache as cache_method
-            elif app.run_method == "GUI":
-                from .qt.cache import cache as cache_method
-            else:
-                # via API calls no great way to send updates
-                app.progress = False
-                cache_method = cache_generic
-        else:
-            cache_method = cache_generic
-        files = await cache_method(app, urls, headers, client)
-
-    return files
-
-
-async def cache_generic(app: 'Application', urls: Iterable[str], headers, client: httpx.AsyncClient) -> list[Union[Content, Exception]]:
-    files = await asyncio.gather(
-        *[
-            asyncio.create_task(
-                cache_url(
-                    app,
-                    url,
-                    headers,
-                    client
+        files = await asyncio.gather(
+            *[
+                asyncio.create_task(
+                    cache_url(
+                        app,
+                        url,
+                        headers,
+                        client,
+                        progress=progress
+                    )
                 )
-            )
-            for url in urls
-        ],
-        return_exceptions=True
-    )
+                for url in urls
+            ],
+            return_exceptions=True
+        )
     return files
 
 

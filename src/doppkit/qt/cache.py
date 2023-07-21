@@ -1,13 +1,10 @@
-import asyncio
-import httpx
 from typing import Iterable, Union, TYPE_CHECKING
 from qtpy import QtWidgets, QtCore
 
+from ..cache import cache as cache_generic
+from ..app import Application
+from ..cache import Content
 
-from ..cache import cache_url, Content
-
-if TYPE_CHECKING:
-    from ..app import Application
 
 class QtProgress(QtCore.QObject):
     
@@ -39,22 +36,11 @@ def connectProgressSignals(progress):
     progress.valueChanged.connect(lambda x: print(f"{x} bytes downloaded"))
 
 
-async def cache(app: 'Application', urls: Iterable[str], headers, client: httpx.AsyncClient) -> list[Union[Content, Exception]]:
+async def cache(
+        app: Application,
+        urls: Iterable[str],
+        headers
+) -> list[Union[Content, Exception]]:
     progress = QtProgress()
     progress.taskAdded.connect(connectProgressSignals)
-    files = await asyncio.gather(
-        *[
-            asyncio.create_task(
-                cache_url(
-                    app,
-                    url,
-                    headers,
-                    client,
-                    progress=progress
-                )
-            )
-            for url in urls
-        ],
-        return_exceptions=True
-    )
-    return files
+    return await cache_generic(app, urls, headers, progress=progress)
