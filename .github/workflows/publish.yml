@@ -45,7 +45,7 @@ jobs:
           pyinstaller --name doppkit-win64-cli \
             --onefile \
             --console \
-            --icon resources/grid-icon.ico \
+            --icon src/doppkit/resources/grid-icon.ico \
             --hidden-import aiofiles \
             cli.py
       - name: Zip Output
@@ -70,7 +70,7 @@ jobs:
         run: |
           python -m pip install pyinstaller .[GUI]
           pyinstaller gui.spec
-          mv .dist/doppkit.exe .dist/doppkit-win64-gui.exe
+          mv ./dist/doppkit.exe ./dist/doppkit-win64-gui.exe
       - name: Zip Output
         run: |
           &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit-win64-gui.zip ./dist/doppkit-win64-gui.exe
