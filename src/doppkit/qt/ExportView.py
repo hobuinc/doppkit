@@ -1,5 +1,5 @@
 from typing import Optional, Union
-from qtpy import QtCore, QtWidgets
+from qtpy import QtCore
 
 
 class AOIItem:

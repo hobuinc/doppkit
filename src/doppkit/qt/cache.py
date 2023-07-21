@@ -1,4 +1,4 @@
-from typing import Iterable, Union, TYPE_CHECKING
+from typing import Iterable, Union
 from qtpy import QtWidgets, QtCore
 
 from ..cache import cache as cache_generic

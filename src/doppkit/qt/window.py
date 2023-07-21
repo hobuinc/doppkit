@@ -37,10 +37,6 @@ class TreeView(QtWidgets.QTreeView):
         super().__init__(parent)
 
 
-
-
-
-
 class Window(QtWidgets.QMainWindow):
 
     def __init__(self, doppkit_application, *args):
