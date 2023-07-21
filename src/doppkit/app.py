@@ -45,9 +45,7 @@ class Application:
         self.limit = asyncio.Semaphore(threads)
         self.override = override
 
-        # can be run via console, API, or GUI
         self.run_method = run_method
-
         self.log_level = log_level
         self.disable_ssl_verification = disable_ssl_verification
         self.directory = os.fsdecode(pathlib.Path.home() / "Downloads")
