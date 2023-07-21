@@ -5,7 +5,7 @@ block_cipher = None
 
 
 a = Analysis(
-    ['src/doppkit/gui.py'],
+    ['src/doppkit/qt/__main__.py'],
     pathex=['resources'],
     binaries=[],
     datas=[],
