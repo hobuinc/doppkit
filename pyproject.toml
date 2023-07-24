@@ -32,7 +32,6 @@ GUI = ["qtpy", "PySide6-essentials", "qasync"]
 
 [tool.setuptools.package-dir]
 doppkit = "src/doppkit"
-# "doppkit.resources" = "resources"
 
 [tool.setuptools.package-data]
 doppkit = ["*.ico"]
@@ -46,5 +45,5 @@ requires = ["setuptools>=64.0"]
 build-backend = "setuptools.build_meta"
 
 [project.scripts]
-doppkit = "doppkit.__main__:cli"
-doppkit-gui = "doppkit.__main__:gui"
+doppkit = "doppkit.cli.__main__:cli"
+doppkit-gui = "doppkit.gui.__main__:main"

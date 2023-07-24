@@ -4,20 +4,17 @@ block_cipher = None
 
 
 a = Analysis(
-    ['src/doppkit/gui/__main__.py'],
+    ['src/doppkit/cli/__main__.py'],
     pathex=['resources'],
     binaries=[],
     datas=[],
-    hiddenimports=['doppkit.resources'],
+    hiddenimports=['doppkit.resources', 'aiofiles'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        "rich",
         "matplotlib",
-        "pygments",
         "PIL",
-        "click"
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -33,7 +30,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='doppkit',
+    name='doppkit-win64-cli.exe',
     debug=False,
     bootloader_ignore_signals=False,
     exclude_binaries=False,
@@ -41,7 +38,7 @@ exe = EXE(
     upx=True,
     upx_exclude=[],
     runtime_tmpdir=None,
-    console=False,
+    console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

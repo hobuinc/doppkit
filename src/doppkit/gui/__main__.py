@@ -1,6 +1,6 @@
 import asyncio
 import contextlib
-import importlib
+from importlib import resources
 import logging
 import os
 import signal
@@ -8,9 +8,8 @@ import sys
 from qtpy import QtWidgets, QtGui
 
 import qasync
-from .window import Window
-from ..app import Application
-
+from doppkit.gui.window import Window
+from doppkit.app import Application
 
 
 async def start_gui(app: 'Application'):
@@ -26,7 +25,7 @@ async def start_gui(app: 'Application'):
     icon = QtGui.QIcon()
     icon.addFile(
         os.path.join(
-            importlib.resources.files("doppkit.resources"),
+            str(resources.files("doppkit.resources")),
             'grid-icon.ico'
         )
     )
