@@ -1,6 +1,6 @@
 
 import asyncio
-from ..grid import Grid
+from doppkit.grid import Grid
 from rich.console import Console
 from rich.table import Table
 

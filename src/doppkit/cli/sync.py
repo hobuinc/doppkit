@@ -1,8 +1,8 @@
 import logging
 from pathlib import Path
 
-from .grid import Grid
-from .rich.cache import cache
+from doppkit.grid import Grid
+from doppkit.cli.cache import cache
 
 
 async def sync(args, pk: str):

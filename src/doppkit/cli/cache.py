@@ -9,7 +9,7 @@ from rich.progress import (
     TaskID
 )
 
-from ..cache import cache as cache_generic
+from doppkit.cache import cache as cache_generic
 if TYPE_CHECKING:
     from ..app import Application
     from ..cache import Content
