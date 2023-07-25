@@ -232,12 +232,9 @@ class Window(QtWidgets.QMainWindow):
         api = Grid(self.doppkit)
         self.AOIs = await api.get_aois(self.AOI_pks[0])
 
-        # we now know enough to render the display data
-        displayData = {aoi["name"]: [export["name"] for export in aoi["exports"]] for aoi in self.AOIs}
-
         model = ExportModel()
         self.exportView.setModel(model)
-        model.load(displayData)
+        model.load(self.AOIs)
         self.exportView.expandAll()
         self.exportView.resizeColumnToContents(0)
         self.exportView.show()
