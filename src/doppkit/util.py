@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import re
+from typing import Optional
 from urllib.parse import unquote
 
 # https://httpwg.org/specs/rfc9110.html#parameter
@@ -35,7 +36,7 @@ _charset_value_re = re.compile(
 # https://www.rfc-editor.org/rfc/rfc2231#section-3
 _continuation_re = re.compile(r"\*(\d+)$", re.ASCII)
 
-def parse_options_header(value: str | None) -> tuple[str, dict[str, str]]:
+def parse_options_header(value: Optional[str]) -> tuple[str, dict[str, str]]:
     """Parse a header that consists of a value with ``key=value`` parameters separated
     by semicolons ``;``. For example, the ``Content-Type`` header.
 
