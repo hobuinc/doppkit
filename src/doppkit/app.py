@@ -52,7 +52,3 @@ class Application:
             f"URL: {self.url}\n"
             f"Run Method: {self.run_method}\n"
         )
-
-
-
-

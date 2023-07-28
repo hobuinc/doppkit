@@ -90,6 +90,8 @@ async def cache(
     )
     timeout = httpx.Timeout(20.0, connect=40.0)
     headers['user-agent'] = f"doppkit/{__version__}/{app.run_method}"
+    headers["Authorization"] = f"Bearer {app.token}"
+
     async with httpx.AsyncClient(
         timeout=timeout, limits=limits, verify=not app.disable_ssl_verification
     ) as client:
@@ -112,7 +114,7 @@ async def cache(
 
 
 async def cache_url(
-        args,
+        args: 'Application',
         url: str,
         headers: dict[str, str],
         client: httpx.AsyncClient,

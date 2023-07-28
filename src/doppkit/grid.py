@@ -5,7 +5,7 @@ import warnings
 import logging
 
 import httpx
-from typing import Optional, Iterable, TypedDict
+from typing import Optional, Iterable, TypedDict, Union
 
 from .cache import cache
 
@@ -52,10 +52,14 @@ class Task(TypedDict):
 
 
 class Export(TypedDict):
+
     name: str
     datatype: str
-    export_Type: str
-    exportfiles: list[Exportfile]
+    export_type: str
+    exportfiles: Union[list[Exportfile], bool]
+    export_total_size: int
+    auxfile_total_size: int
+    complete_size: int
     file_export_options: str
     file_format_options: str
     hsrs: Optional[str]
@@ -72,6 +76,8 @@ class Export(TypedDict):
     user: str
     vsrs: Optional[str]
     zip_url: str
+
+Export.__optional_keys__ = frozenset({'export_total_size', 'auxfile_total_size', 'complete_size'})
 
 
 class AOI(TypedDict):
@@ -98,7 +104,7 @@ class Grid:
     async def get_aois(self, pk: Optional[int]=None) -> list[AOI]:
         url_args = 'intersections=false&intersection_geoms=false'
         if pk:
-            url_args += "&export_full=false&sort=pk"
+            url_args += "&export_full=true&sort=pk"  # TODO: reset to export_full=false
             aoi_endpoint = f"{self.args.url}{aoi_endpoint_ext}/{pk}?{url_args}"
         else:
             # Grab full dictionary for the export and parse out the download urls
@@ -208,7 +214,6 @@ class Grid:
         export_pk
             Export PK to get a list of Exportfiles for
 
-
         Returns
         -------
         list of Exportfile
@@ -258,5 +263,3 @@ class Grid:
             for item in ex:
                 output.extend(iter(item['exportfiles']))
         return output
-
-

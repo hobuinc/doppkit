@@ -3,12 +3,14 @@ from .. import __version__
 from ..grid import Grid, AOI, Exportfile, Export
 from .cache import cache
 from qtpy import QtCore, QtGui, QtWidgets
-from typing import Optional
+from typing import Optional, TypedDict, NamedTuple
 import pathlib
 import logging
+import warnings
 import qasync
 
-from .ExportView import ExportModel
+
+from .ExportView import ExportModel, ExportDelegate, QtProgress
 
 class DirectoryValidator(QtGui.QValidator):
 
@@ -28,7 +30,7 @@ class URLValidator(QtGui.QValidator):
             state = QtGui.QValidator.State.Acceptable
         else:
             state = QtGui.QValidator.State.Intermediate
-        return (state, input_, pos)
+        return state, input_, pos
 
 
 class TreeView(QtWidgets.QTreeView):
@@ -48,10 +50,13 @@ class Window(QtWidgets.QMainWindow):
         self.AOI_pks: list[int] = []
         self.AOIs: list[AOI] = []  # populated from GRiD
 
+        self.progressTracker = QtProgress()
+
         self.exportView = TreeView()
         self.exportView.header().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Interactive)
         self.exportView.header().setCascadingSectionResizes(True)
         self.exportView.setHeaderHidden(False)
+        self.exportView.setItemDelegateForColumn(1, ExportDelegate())
         contents = QtWidgets.QWidget()
         self.setCentralWidget(contents)
 
@@ -115,20 +120,20 @@ class Window(QtWidgets.QMainWindow):
 
         downloadAction.triggered.connect(self.showDownloadDialog)
 
-        buttonList = QtWidgets.QPushButton("List Exports")
-        buttonList.clicked.connect(aoiLineEdit.editingFinished)
-        buttonList.clicked.connect(tokenLineEdit.editingFinished)
+        self.buttonList = QtWidgets.QPushButton("List Exports")
+        self.buttonList.clicked.connect(aoiLineEdit.editingFinished)
+        self.buttonList.clicked.connect(tokenLineEdit.editingFinished)
         # we connect using a queued connection to ensure that the AOILineEdit
         # registers the finished signal
-        buttonList.clicked.connect(
+        self.buttonList.clicked.connect(
             self.listExports,
             QtCore.Qt.ConnectionType.QueuedConnection
         )
-        buttonDownload = QtWidgets.QPushButton("Download Exports")
-        buttonDownload.clicked.connect(aoiLineEdit.editingFinished)
-        buttonDownload.clicked.connect(tokenLineEdit.editingFinished)
-        buttonDownload.clicked.connect(downloadLineEdit.editingFinished)
-        buttonDownload.clicked.connect(
+        self.buttonDownload = QtWidgets.QPushButton("Download Exports")
+        self.buttonDownload.clicked.connect(aoiLineEdit.editingFinished)
+        self.buttonDownload.clicked.connect(tokenLineEdit.editingFinished)
+        self.buttonDownload.clicked.connect(downloadLineEdit.editingFinished)
+        self.buttonDownload.clicked.connect(
             self.downloadExports,
             QtCore.Qt.ConnectionType.QueuedConnection
         )
@@ -152,8 +157,8 @@ class Window(QtWidgets.QMainWindow):
         }
 
         buttonLayout = QtWidgets.QHBoxLayout()
-        buttonLayout.addWidget(buttonList)
-        buttonLayout.addWidget(buttonDownload)
+        buttonLayout.addWidget(self.buttonList)
+        buttonLayout.addWidget(self.buttonDownload)
 
         for widgets in grouping.values():
             for widget in widgets:
@@ -227,52 +232,68 @@ class Window(QtWidgets.QMainWindow):
 
     @qasync.asyncSlot()
     async def listExports(self):
+        self.buttonList.setEnabled(False)
         # TODO: this should accept a list of AOIs
         # get AOI objects from GRiD
         api = Grid(self.doppkit)
         self.AOIs = await api.get_aois(self.AOI_pks[0])
-
         model = ExportModel()
         self.exportView.setModel(model)
         model.load(self.AOIs)
+        self.exportView.setItemDelegateForColumn(0, ExportDelegate())
         self.exportView.expandAll()
-        self.exportView.resizeColumnToContents(0)
         self.exportView.show()
+        self.exportView.resizeColumnToContents(0)
+        # self.exportView.resizeColumnToContents(1)
         self.exportView.setAlternatingRowColors(True)
+        self.buttonList.setEnabled(True)
 
     @qasync.asyncSlot()
     async def downloadExports(self):
-        self.listExports()
+        self.buttonDownload.setEnabled(False)
+        await self.listExports()  # get the exports
 
         api = Grid(self.doppkit)
         # now we get information to each exportfile
-        export_files = []
-        for aoi in self.AOIs:
-            for export in aoi["exports"]:
-                # TODO: this doesn't force ordering does it?
-                export_files.extend(await api.get_exports(export["pk"]))
-                # TODO: compute total export file-size download
 
         download_dir = pathlib.Path(self.doppkit.directory)
         download_dir.mkdir(exist_ok=True)
 
         urls = []
-        for export_file in export_files:
-            filename = export_file["name"]
-            download_url = export_file["url"]
-            size = export_file.get("filesize", 0)
+        for aoi in self.AOIs:
+            for export in aoi["exports"]:
+                # need to check for export_files, if not present, we need to populate
+                if isinstance(export["exportfiles"], bool):
+                    # we need to grab the list of exportfiles...
+                    export["exportfiles"] = await api.get_exports(export["pk"])
 
-            download_destination = download_dir.joinpath(filename)
-            # TODO: compare with filesize attribute
-            if not self.doppkit.override and download_destination.exists():
-                logging.debug(f"File already exists, skipping {filename}")
-            else:
-                urls.append(download_url)
+                # if using the older API, fill in the respective field
+                if "export_total_size" not in export.keys():
+                    export["export_total_size"] = sum(export_file["filesize"] for export_file in export["exportfiles"])
 
-        print(f"URLs to download: {urls}")
-        headers = {
-            "Authorization": f"Bearer {self.doppkit.token}"
-        }
-        _  = await cache(self.doppkit, urls, headers)
+                if "complete_size" not in export.keys():
+                    # auxfile total size attribute not at all accessible in v3 of GRiD API
+                    export["complete_size"] = export["export_total_size"] + export.get("auxfile_total_size", 0)
 
-        print("All Done!!!")
+
+
+                download_size = 0
+                for export_file in export["exportfiles"]:
+                    filename = export_file["name"]
+                    download_destination = download_dir.joinpath(filename)
+                    download_size += export_file["filesize"]
+                    # TODO: compare filesizes, not just if it exists
+                    if not self.doppkit.override and download_destination.exists():
+                        logging.debug(f"File already exists, skipping {filename}")
+                    else:
+                        urls.append(export_file["url"])
+
+
+
+                # update the progress module with
+
+        # need to flatten the list of export URLs
+        _ = await cache(self.doppkit, urls, {})
+        self.buttonDownload.setEnabled(True)
+
+

@@ -1,7 +1,76 @@
-from typing import Optional, Union
-from qtpy import QtCore
+from typing import Optional, Union, NamedTuple
+from qtpy import QtCore, QtGui, QtWidgets
 
 from doppkit.grid import Export, AOI
+
+
+class ProgressTracking(NamedTuple):
+    current: int
+    total: int
+
+    def ratio(self) -> float:
+        return self.current / self.total
+
+class QtProgress(QtCore.QObject):
+
+    taskRemoved = QtCore.Signal(object)
+    taskAdded = QtCore.Signal(object, int)
+    taskUpdated = QtCore.Signal(object, int)
+
+    def __init__(self):
+        super().__init__()
+        self.tasks: dict[str, Optional[ProgressTracking]] = {}
+        self.AOIs = {}
+
+    def create_task(self, name: str, total: int):
+
+        self.tasks[name] = ProgressTracking(0, total)
+        self.taskAdded.emit(task, total)
+
+    def update(self, name: str, completed: int) -> None:
+        task = self.tasks[name]
+
+        self.taskUpdated.emit(task, completed)
+
+
+    def complete_task(self, name: str) -> None:
+        self.tasks[name] = None
+        self.taskRemoved.emit(task)
+        self.tasks.remove
+
+class ExportDelegate(QtWidgets.QStyledItemDelegate):
+
+    def __int__(self, parent=None):
+        super().__init__(parent)
+
+    def paint(
+            self,
+            painter: QtGui.QPainter,
+            option: QtWidgets.QStyleOptionViewItem,
+            index: QtCore.QModelIndex
+    ) -> None:
+
+        item: Union['AOIItem', 'ExportItem'] = index.internalPointer()
+        if isinstance(item, AOIItem):
+            return super().paint(painter, option, index)
+        progressBarOption = QtWidgets.QStyleOptionProgressBar()
+        progressBarOption.rect = option.rect
+        progressBarOption.state = option.state | QtWidgets.QStyle.StateFlag.State_Horizontal
+        progressBarOption.palette = option.palette
+        progressBarOption.minimum = 0
+        progressBarOption.maximum = item.size
+        progressBarOption.progress = item.progress
+        progressBarOption.text = f"{item.name}\t{progressBarOption.maximum}"
+        progressBarOption.textVisible = True
+        progressBarOption.textAlignment = QtCore.Qt.AlignmentFlag.AlignLeft
+        painter.save()
+        painter.setFont(QtGui.QFont("Arial", pointSize=10))
+        QtWidgets.QApplication.style().drawControl(
+            QtWidgets.QStyle.ControlElement.CE_ProgressBar,
+            progressBarOption,
+            painter
+        )
+        painter.restore()
 
 
 
@@ -13,6 +82,8 @@ class ExportItem:
         self.export = export
         self.name = self.export['name']
         self.export_files = self.export['exportfiles']
+        self.size = export["complete_size"]
+        self.progress = 0
         self._data = ["Export"]
 
     def parentItem(self):
@@ -30,13 +101,17 @@ class ExportItem:
 
 class AOIItem:
 
-    def __init__(self, aoi: AOI, parent: 'RootItem') -> None:
+    def __init__(self, aoi: AOI, parent: 'RootItem', progressInterconnect: QtProgress) -> None:
         super().__init__()
         self._parentItem = parent
-        self.childItems = [ExportItem(export, self) for export in aoi['exports']]
         self.aoi = aoi
         self.name = aoi['name']
+        self.progress = 0
         self._data = ["AOI"]
+        self.childItems = [ExportItem(export, self) for export in aoi['exports']]
+        self.size = sum(export["complete_size"] for export in self.childItems)
+        progressInterconnect.
+
 
     def child(self, row: int) -> Optional[ExportItem]:
         try:
@@ -96,10 +171,11 @@ class RootItem:
     def load(
         cls,
         areas_of_interest: list[AOI],
+        progressInterconnect
     ) -> 'RootItem':
         rootItem = RootItem()
         for aoi in areas_of_interest:
-            child = AOIItem(aoi, rootItem)
+            child = AOIItem(aoi, rootItem, progressInterconnect)
             rootItem.appendChild(child)
         return rootItem
 
