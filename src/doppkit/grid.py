@@ -257,9 +257,9 @@ class Grid:
             j = json.loads(f.data)
             exports.append(j)
 
-        output = []
+        export_files = []
         for e in exports:
             ex = e['exports']
             for item in ex:
-                output.extend(iter(item['exportfiles']))
-        return output
+                export_files.extend(iter(item['exportfiles']))
+        return export_files

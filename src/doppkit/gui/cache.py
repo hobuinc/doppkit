@@ -1,28 +1,18 @@
-import pathlib
-from typing import Iterable, Union
-from qtpy import QtWidgets, QtCore
+from typing import Iterable, Union, TYPE_CHECKING
 
-from .ExportView import QtProgress
 from ..app import Application
 from ..cache import Content
 from ..cache import cache as cache_generic
 
+if TYPE_CHECKING:
+    from .window import QtProgress
 
-
-
-def connectProgressSignals(qprogress):
-    # qprogress.valueChanged.connect(lambda x: print(f"{x} bytes downloaded"))
-    pass
-
-
-
-# async def download_exports()
 
 async def cache(
         app: Application,
         urls: Iterable[str],
         headers: dict[str, str],
-        progress: QtProgress
+        progress: 'QtProgress'
 ) -> list[Union[Content, Exception]]:
     """
     Downloads URL contents from GRiD
@@ -34,6 +24,9 @@ async def cache(
         List of URLs to download the contents of
     headers
         Header information to relay to the GRiD Server
+    progress
+        Progress Interconnect for doppkit cache function to relay
+        download progress through.
 
     Returns
     -------

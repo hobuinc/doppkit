@@ -1,42 +1,14 @@
-from typing import Optional, Union, NamedTuple
+from typing import Optional, Union, TYPE_CHECKING
 from qtpy import QtCore, QtGui, QtWidgets
+import qasync
 
 from doppkit.grid import Export, AOI
 
-
-class ProgressTracking(NamedTuple):
-    current: int
-    total: int
-
-    def ratio(self) -> float:
-        return self.current / self.total
-
-class QtProgress(QtCore.QObject):
-
-    taskRemoved = QtCore.Signal(object)
-    taskAdded = QtCore.Signal(object, int)
-    taskUpdated = QtCore.Signal(object, int)
-
-    def __init__(self):
-        super().__init__()
-        self.tasks: dict[str, Optional[ProgressTracking]] = {}
-        self.AOIs = {}
-
-    def create_task(self, name: str, total: int):
-
-        self.tasks[name] = ProgressTracking(0, total)
-        self.taskAdded.emit(task, total)
-
-    def update(self, name: str, completed: int) -> None:
-        task = self.tasks[name]
-
-        self.taskUpdated.emit(task, completed)
+if TYPE_CHECKING:
+    from .window import QtProgress, ProgressTracking
 
 
-    def complete_task(self, name: str) -> None:
-        self.tasks[name] = None
-        self.taskRemoved.emit(task)
-        self.tasks.remove
+
 
 class ExportDelegate(QtWidgets.QStyledItemDelegate):
 
@@ -53,13 +25,21 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
         item: Union['AOIItem', 'ExportItem'] = index.internalPointer()
         if isinstance(item, AOIItem):
             return super().paint(painter, option, index)
+
+        try:
+            progress = item.progressInterconnect.tasks[item.export["pk"]]
+        except KeyError:
+            # when we're not actually tracking download progress...
+            completed = 0
+        else:
+            completed = progress.percentage()
         progressBarOption = QtWidgets.QStyleOptionProgressBar()
         progressBarOption.rect = option.rect
         progressBarOption.state = option.state | QtWidgets.QStyle.StateFlag.State_Horizontal
         progressBarOption.palette = option.palette
         progressBarOption.minimum = 0
-        progressBarOption.maximum = item.size
-        progressBarOption.progress = item.progress
+        progressBarOption.maximum = item.total
+        progressBarOption.progress = completed
         progressBarOption.text = f"{item.name}\t{progressBarOption.maximum}"
         progressBarOption.textVisible = True
         progressBarOption.textAlignment = QtCore.Qt.AlignmentFlag.AlignLeft
@@ -74,19 +54,27 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
 
 
 
-class ExportItem:
+class ExportItem(QtCore.QObject):
 
-    def __init__(self, export: Export, parent: 'AOIItem') -> None:
+    def __init__(self, export: Export, parent: 'AOIItem', progressInterconnect: 'QtProgress') -> None:
         super().__init__()
         self._parentItem = parent
         self.export = export
         self.name = self.export['name']
         self.export_files = self.export['exportfiles']
-        self.size = export["complete_size"]
+        # self.size = export.get("complete_size", 1)  # complete_size only in newer GRiD API
+        self.total = 100
         self.progress = 0
         self._data = ["Export"]
+        self.progressInterconnect = progressInterconnect
+        self.progressInterconnect.taskUpdated.connect(self.updateProgress)
 
-    def parentItem(self):
+    def updateProgress(self, progress: 'ProgressTracking'):
+        if progress.export_pk == self.export["pk"]:
+            self.total = 100
+            self.progress = progress.percentage()
+
+    def parentItem(self) -> 'AOIItem':
         return self._parentItem
 
     @staticmethod
@@ -101,17 +89,25 @@ class ExportItem:
 
 class AOIItem:
 
-    def __init__(self, aoi: AOI, parent: 'RootItem', progressInterconnect: QtProgress) -> None:
+    def __init__(self, aoi: AOI, parent: 'RootItem', progressInterconnect: 'QtProgress') -> None:
         super().__init__()
         self._parentItem = parent
         self.aoi = aoi
         self.name = aoi['name']
         self.progress = 0
         self._data = ["AOI"]
-        self.childItems = [ExportItem(export, self) for export in aoi['exports']]
-        self.size = sum(export["complete_size"] for export in self.childItems)
-        progressInterconnect.
+        self.childItems = [ExportItem(export, self, progressInterconnect) for export in aoi['exports']]
+        # self.size = sum(export.size for export in self.childItems)
+        self.total = 100
+        self.progressInterconnect = progressInterconnect
+        # progressInterconnect.taskUpdated.connect(self.updateProgress)
 
+    # @qasync.asyncSlot(object)
+    # def updateProgress(self, _: 'ProgressTracking'):
+    #     export_progress = self.progressInterconnect.aois[self.aoi["pk"]]
+    #     total_size = sum(progress.current for progress in export_progress)
+    #     self.progress = total_size
+    #     print("AOI Progress Called!")
 
     def child(self, row: int) -> Optional[ExportItem]:
         try:
@@ -171,7 +167,7 @@ class RootItem:
     def load(
         cls,
         areas_of_interest: list[AOI],
-        progressInterconnect
+        progressInterconnect: 'QtProgress'
     ) -> 'RootItem':
         rootItem = RootItem()
         for aoi in areas_of_interest:
@@ -236,9 +232,9 @@ class ExportModel(QtCore.QAbstractItemModel):
             return self.rootItem.data(section)
         return ""
 
-    def load(self, data: list[AOI]) -> None:
+    def load(self, data: list[AOI], progressInterconnect: 'QtProgress') -> None:
         self.beginResetModel()
-        self.rootItem = RootItem.load(data)
+        self.rootItem = RootItem.load(data, progressInterconnect)
         self.endResetModel()
 
     def clear(self) -> None:

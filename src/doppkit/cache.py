@@ -18,13 +18,13 @@ if TYPE_CHECKING:
 
 class Progress(Protocol):
 
-    def update(self, name: str, completed: int) -> None:
+    def update(self, name: str, url: str, completed: int) -> None:
         ...
 
-    def create_task(self, name: str, total: int) -> None:
+    def create_task(self, name: str, url: str, total: int) -> None:
         ...
     
-    def complete_task(self, name: str) -> None:
+    def complete_task(self, name: str, url: str) -> None:
         ...
 
 class Content:
@@ -139,7 +139,7 @@ async def cache_url(
         c = Content(response.headers, filename=filename, args=args)
         if args.progress and progress is not None:
             name = c.target.name if isinstance(c.target, pathlib.Path) else "bytesIO"
-            progress.create_task(f"{name}", total=total)
+            progress.create_task(f"{name}", url, total=total)
         chunk_count = 0
         if isinstance(c.target, BytesIO):
             # do in-memory stuff
@@ -149,7 +149,7 @@ async def cache_url(
 
                 if args.progress and progress is not None:
                     progress.update(
-                        name, completed=response.num_bytes_downloaded
+                        name, url, completed=response.num_bytes_downloaded
                     )
             c.target.flush()
             c.target.seek(0)
@@ -162,14 +162,13 @@ async def cache_url(
                 async for chunk in response.aiter_bytes():
                     await f.write(chunk)
                     chunk_count += 1
-
                     if args.progress and progress is not None:
                         progress.update(
-                            name, completed=response.num_bytes_downloaded
+                            name, url, completed=response.num_bytes_downloaded
                         )
         if args.progress and progress is not None:
             # we can hide the task now that it's finished
-            progress.complete_task(name)
+            progress.complete_task(name, url)
         await response.aclose()
         if limit.locked():
             await asyncio.sleep(0.5)

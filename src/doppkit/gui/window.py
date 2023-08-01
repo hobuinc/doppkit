@@ -4,13 +4,91 @@ from ..grid import Grid, AOI, Exportfile, Export
 from .cache import cache
 from qtpy import QtCore, QtGui, QtWidgets
 from typing import Optional, TypedDict, NamedTuple
+from collections import defaultdict
+from dataclasses import dataclass
 import pathlib
 import logging
+import math
 import warnings
 import qasync
 
 
-from .ExportView import ExportModel, ExportDelegate, QtProgress
+from .ExportView import ExportModel, ExportDelegate
+
+
+class QtProgress(QtCore.QObject):
+
+    taskRemoved = QtCore.Signal(object)
+    taskAdded = QtCore.Signal(object)
+    taskUpdated = QtCore.Signal(object)
+
+    def __init__(self):
+        super().__init__()
+        # key is the export PK
+        self.tasks: dict[int, ProgressTracking] = {}
+
+        # key is AOI PK
+        self.aois: dict[int, list[ProgressTracking]] = defaultdict(list)
+
+        # dictionary of name with URL
+        self.urls_to_export_pk: dict[str, int] = {}
+
+    def create_task(self, name: str, url: str, total: int):
+        """
+        Method adds a task to track the download progress
+
+        Parameters
+        ----------
+        name
+            The name of the file being downloaded
+        url
+            The URL to contents of the file are being downloaded from
+        total
+            The total size of the file in bytes
+
+        Returns
+        -------
+            None
+        """
+
+        try:
+            export_pk = self.urls_to_export_pk[url]
+        except KeyError as e:
+            raise RuntimeError("Unexpected URL for tracking download progress received") from e
+        else:
+            task = self.tasks[export_pk]
+            self.taskAdded.emit(task)
+
+    def update(self, name: str, url: str, completed: int) -> None:
+        try:
+            export_pk = self.urls_to_export_pk[url]
+        except KeyError as e:
+            raise RuntimeError("Unexpected URL for tracking download progress received") from e
+        else:
+            task = self.tasks[export_pk]
+            task.current = completed
+            self.taskUpdated.emit(task)
+
+    def complete_task(self, name: str, url: str) -> None:
+        try:
+            export_pk = self.urls_to_export_pk[url]
+        except KeyError as e:
+            raise RuntimeError("Unexpected URL for tracking download progress received") from e
+        else:
+            task = self.tasks[export_pk]
+            task.current = task.total
+
+        # task = self.tasks.pop(export_pk)
+        # self.taskRemoved.emit(task)
+
+
+    def update_export_progress(self):
+        pass
+
+    def update_aoi_progress(self):
+        pass
+
+
 
 class DirectoryValidator(QtGui.QValidator):
 
@@ -239,7 +317,8 @@ class Window(QtWidgets.QMainWindow):
         self.AOIs = await api.get_aois(self.AOI_pks[0])
         model = ExportModel()
         self.exportView.setModel(model)
-        model.load(self.AOIs)
+        self.progressInterconnect = QtProgress()
+        model.load(self.AOIs, self.progressInterconnect)
         self.exportView.setItemDelegateForColumn(0, ExportDelegate())
         self.exportView.expandAll()
         self.exportView.show()
@@ -275,8 +354,6 @@ class Window(QtWidgets.QMainWindow):
                     # auxfile total size attribute not at all accessible in v3 of GRiD API
                     export["complete_size"] = export["export_total_size"] + export.get("auxfile_total_size", 0)
 
-
-
                 download_size = 0
                 for export_file in export["exportfiles"]:
                     filename = export_file["name"]
@@ -287,13 +364,28 @@ class Window(QtWidgets.QMainWindow):
                         logging.debug(f"File already exists, skipping {filename}")
                     else:
                         urls.append(export_file["url"])
+                        self.progressInterconnect.urls_to_export_pk[export_file["url"]] = export["pk"]
+                progress_tracker = ProgressTracking(
+                    export["pk"],
+                    aoi_pk=aoi["pk"],
+                    current=0,
+                    total=export["complete_size"],
+                )
+                self.progressInterconnect.tasks[export["pk"]] = progress_tracker
+                self.progressInterconnect.aois[aoi["pk"]].append(progress_tracker)
 
-
-
-                # update the progress module with
-
-        # need to flatten the list of export URLs
-        _ = await cache(self.doppkit, urls, {})
+        _ = await cache(self.doppkit, urls, {}, progress=self.progressInterconnect)
         self.buttonDownload.setEnabled(True)
 
+@dataclass
+class ProgressTracking:
+    export_pk: int
+    aoi_pk: int
+    current: int
+    total: int
 
+    def ratio(self) -> float:
+        return self.current / self.total
+
+    def percentage(self) -> int:
+        return math.floor(100 * self.ratio())
