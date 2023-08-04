@@ -1,13 +1,10 @@
 from typing import Optional, Union, TYPE_CHECKING
 from qtpy import QtCore, QtGui, QtWidgets
-import qasync
 
 from doppkit.grid import Export, AOI
 
 if TYPE_CHECKING:
     from .window import QtProgress, ProgressTracking
-
-
 
 
 class ExportDelegate(QtWidgets.QStyledItemDelegate):
@@ -27,31 +24,48 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
             return super().paint(painter, option, index)
 
         try:
-            progress = item.progressInterconnect.tasks[item.export["pk"]]
+            progress = item.progressInterconnect.export_progress[item.export["pk"]]
         except KeyError:
             # when we're not actually tracking download progress...
             completed = 0
+            text = item.name
         else:
-            completed = progress.percentage()
+            completed = progress.int32_progress()
+            text = str(progress)
+
         progressBarOption = QtWidgets.QStyleOptionProgressBar()
         progressBarOption.rect = option.rect
         progressBarOption.state = option.state | QtWidgets.QStyle.StateFlag.State_Horizontal
         progressBarOption.palette = option.palette
         progressBarOption.minimum = 0
-        progressBarOption.maximum = item.total
+        progressBarOption.maximum = (2 ** 32 - 1) // 2
         progressBarOption.progress = completed
-        progressBarOption.text = f"{item.name}\t{progressBarOption.maximum}"
         progressBarOption.textVisible = True
-        progressBarOption.textAlignment = QtCore.Qt.AlignmentFlag.AlignLeft
+
+        progressFont = QtGui.QFont()
+        progressFont.setPointSize(12)
+        progressFont.setStyleHint(QtGui.QFont.StyleHint.SansSerif)
+        fontMetrics = QtGui.QFontMetrics(progressFont)
+
+        text = fontMetrics.elidedText(text, QtCore.Qt.TextElideMode.ElideMiddle, option.rect.width())
+
+        progressBarOption.rect = fontMetrics.boundingRect(
+            option.rect,
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.TextFlag.TextSingleLine,
+            text,
+        )
+
+        progressBarOption.text = text
+        progressBarOption.fontMetrics = fontMetrics
+
         painter.save()
-        painter.setFont(QtGui.QFont("Arial", pointSize=10))
+        painter.setFont(progressFont)
         QtWidgets.QApplication.style().drawControl(
             QtWidgets.QStyle.ControlElement.CE_ProgressBar,
             progressBarOption,
             painter
         )
         painter.restore()
-
 
 
 class ExportItem(QtCore.QObject):
@@ -62,17 +76,8 @@ class ExportItem(QtCore.QObject):
         self.export = export
         self.name = self.export['name']
         self.export_files = self.export['exportfiles']
-        # self.size = export.get("complete_size", 1)  # complete_size only in newer GRiD API
-        self.total = 100
-        self.progress = 0
         self._data = ["Export"]
         self.progressInterconnect = progressInterconnect
-        self.progressInterconnect.taskUpdated.connect(self.updateProgress)
-
-    def updateProgress(self, progress: 'ProgressTracking'):
-        if progress.export_pk == self.export["pk"]:
-            self.total = 100
-            self.progress = progress.percentage()
 
     def parentItem(self) -> 'AOIItem':
         return self._parentItem
@@ -94,20 +99,9 @@ class AOIItem:
         self._parentItem = parent
         self.aoi = aoi
         self.name = aoi['name']
-        self.progress = 0
         self._data = ["AOI"]
         self.childItems = [ExportItem(export, self, progressInterconnect) for export in aoi['exports']]
-        # self.size = sum(export.size for export in self.childItems)
-        self.total = 100
         self.progressInterconnect = progressInterconnect
-        # progressInterconnect.taskUpdated.connect(self.updateProgress)
-
-    # @qasync.asyncSlot(object)
-    # def updateProgress(self, _: 'ProgressTracking'):
-    #     export_progress = self.progressInterconnect.aois[self.aoi["pk"]]
-    #     total_size = sum(progress.current for progress in export_progress)
-    #     self.progress = total_size
-    #     print("AOI Progress Called!")
 
     def child(self, row: int) -> Optional[ExportItem]:
         try:
@@ -182,6 +176,7 @@ class ExportModel(QtCore.QAbstractItemModel):
 
         super().__init__(parent)
         self.rootItem: Optional[AOIItem] = None
+        # self.mapFromUrlToIndex: dict[str, QtCore.QModelIndex] = {}
 
     def index(self, row: int, column: int, parent: QtCore.QModelIndex = QtCore.QModelIndex()) -> QtCore.QModelIndex:
         parentItem = parent.internalPointer() if parent.isValid() else self.rootItem
@@ -218,9 +213,8 @@ class ExportModel(QtCore.QAbstractItemModel):
 
         if role == QtCore.Qt.ItemDataRole.DisplayRole and index.column() == 0:
             return item.name
-
-        elif role == QtCore.Qt.ItemDataRole.UserRole and index.column() == 1:
-            return item.progress
+        # elif role == QtCore.Qt.ItemDataRole.UserRole:
+        #     return str(item.progress)
 
     def headerData(
             self,
@@ -236,6 +230,26 @@ class ExportModel(QtCore.QAbstractItemModel):
         self.beginResetModel()
         self.rootItem = RootItem.load(data, progressInterconnect)
         self.endResetModel()
+        progressInterconnect.taskUpdated.connect(self._updateTask)
+        progressInterconnect.taskCompleted.connect(self._updateTask)
+
+    def _updateTask(self, _: 'ProgressTracking'):
+        for row in range(self.rowCount()):
+            aoi_index = self.index(row, 0)
+            n_exports = self.rowCount(parent=aoi_index)
+            export_index_top = self.index(0, 0, parent=aoi_index)
+
+            export_index_bottom = self.index(n_exports - 1, 0, parent=aoi_index)
+            self.dataChanged.emit(
+                export_index_top,
+                export_index_bottom,
+                [
+                    QtCore.Qt.ItemDataRole.DisplayRole,
+                    QtCore.Qt.ItemDataRole.UserRole
+                ]
+            )
 
     def clear(self) -> None:
-         self.load([])
+         self.beginResetModel()
+         self.rootItem = None
+         self.endResetModel()
