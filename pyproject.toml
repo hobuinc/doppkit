@@ -29,6 +29,9 @@ repository = "https://github.com/hobuinc/doppkit"
 [project.optional-dependencies]
 GUI = ["qtpy", "PySide6-essentials", "qasync"]
 
+[tool.black]
+line-length = 88
+target-version = ['py39', 'py311']
 
 [tool.setuptools.package-dir]
 doppkit = "src/doppkit"

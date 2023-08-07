@@ -1,19 +1,109 @@
-from typing import Optional, Union
-from qtpy import QtCore
+from typing import Optional, Union, TYPE_CHECKING
+from qtpy import QtCore, QtGui, QtWidgets
 
+from doppkit.grid import Export, AOI
+
+if TYPE_CHECKING:
+    from .window import QtProgress, ProgressTracking
+
+
+class ExportDelegate(QtWidgets.QStyledItemDelegate):
+
+    def __int__(self, parent=None):
+        super().__init__(parent)
+
+    def paint(
+            self,
+            painter: QtGui.QPainter,
+            option: QtWidgets.QStyleOptionViewItem,
+            index: QtCore.QModelIndex
+    ) -> None:
+
+        item: Union['AOIItem', 'ExportItem'] = index.internalPointer()
+        if isinstance(item, AOIItem):
+            return super().paint(painter, option, index)
+
+        try:
+            progress = item.progressInterconnect.export_progress[item.export["pk"]]
+        except KeyError:
+            # when we're not actually tracking download progress...
+            completed = 0
+            text = item.name
+        else:
+            completed = progress.int32_progress()
+            text = str(progress)
+
+        progressBarOption = QtWidgets.QStyleOptionProgressBar()
+        progressBarOption.rect = option.rect
+        progressBarOption.state = option.state | QtWidgets.QStyle.StateFlag.State_Horizontal
+        progressBarOption.palette = option.palette
+        progressBarOption.minimum = 0
+        progressBarOption.maximum = (2 ** 32 - 1) // 2
+        progressBarOption.progress = completed
+        progressBarOption.textVisible = True
+
+        progressFont = QtGui.QFont()
+        progressFont.setPointSize(12)
+        progressFont.setStyleHint(QtGui.QFont.StyleHint.SansSerif)
+        fontMetrics = QtGui.QFontMetrics(progressFont)
+
+        text = fontMetrics.elidedText(text, QtCore.Qt.TextElideMode.ElideMiddle, option.rect.width())
+
+        progressBarOption.rect = fontMetrics.boundingRect(
+            option.rect,
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.TextFlag.TextSingleLine,
+            text,
+        )
+
+        progressBarOption.text = text
+        progressBarOption.fontMetrics = fontMetrics
+
+        painter.save()
+        painter.setFont(progressFont)
+        QtWidgets.QApplication.style().drawControl(
+            QtWidgets.QStyle.ControlElement.CE_ProgressBar,
+            progressBarOption,
+            painter
+        )
+        painter.restore()
+
+
+class ExportItem(QtCore.QObject):
+
+    def __init__(self, export: Export, parent: 'AOIItem', progressInterconnect: 'QtProgress') -> None:
+        super().__init__()
+        self._parentItem = parent
+        self.export = export
+        self.name = self.export['name']
+        self.export_files = self.export['exportfiles']
+        self._data = ["Export"]
+        self.progressInterconnect = progressInterconnect
+
+    def parentItem(self) -> 'AOIItem':
+        return self._parentItem
+
+    @staticmethod
+    def childCount():
+        return 0
+
+    def data(self, section: int) -> str:
+        try:
+            return self._data[section]
+        except IndexError:
+            return ""
 
 class AOIItem:
 
-    def __init__(self, parent: Optional['AOIItem'] = None, name: str = "") -> None:
+    def __init__(self, aoi: AOI, parent: 'RootItem', progressInterconnect: 'QtProgress') -> None:
         super().__init__()
-        self._parentItem: Optional['AOIItem'] = parent
-        self.childItems: list['AOIItem'] = []
-        self.name = name
+        self._parentItem = parent
+        self.aoi = aoi
+        self.name = aoi['name']
+        self._data = ["AOI"]
+        self.childItems = [ExportItem(export, self, progressInterconnect) for export in aoi['exports']]
+        self.progressInterconnect = progressInterconnect
 
-    def appendChild(self, item: 'AOIItem') -> None:
-        self.childItems.append(item)
-
-    def child(self, row: int) -> Optional['AOIItem']:
+    def child(self, row: int) -> Optional[ExportItem]:
         try:
             return self.childItems[row]
         except IndexError:
@@ -22,44 +112,71 @@ class AOIItem:
     def childCount(self) -> int:
         return len(self.childItems)
 
-    def row(self) -> int:
-        return 0 if self.parentItem() is None else self.parentItem().childItems.index(self)
+    @staticmethod
+    def row() -> int:
+        return 0
 
-    def parentItem(self) -> Optional['AOIItem']:
+    def parentItem(self) -> 'RootItem':
         return self._parentItem
+
+    def data(self, section: int) -> str:
+        try:
+            return self._data[section]
+        except IndexError:
+            return ""
 
     def __repr__(self):
         return f"{self.name=}\t{self.childItems=}"
 
+
+class RootItem:
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.childItems: list[AOIItem] = []
+        self.name = "root"
+        self._data = ["AOI", "Export"]
+
+    def appendChild(self, child: AOIItem) -> None:
+        self.childItems.append(child)
+
+    def childCount(self) -> int:
+        return len(self.childItems)
+
+    def child(self, row: int) -> Optional[AOIItem]:
+        try:
+            return self.childItems[row]
+        except IndexError:
+            return None
+    @staticmethod
+    def parentItem() -> None:
+        return None
+    def data(self, section: int) -> str:
+        try:
+            return self._data[section]
+        except IndexError:
+            return ""
+
     @classmethod
     def load(
         cls,
-        value: Union[list[str], dict[str, list[str]], str],
-        parent: Optional['AOIItem'] = None
-    ) -> 'AOIItem':
-        rootItem = AOIItem(parent)
-        rootItem.name = "root"
-        if isinstance(value, dict):
-            for aoi_name, exports in value.items():
-                child = cls.load(exports, rootItem)
-                child.name = aoi_name
-                rootItem.appendChild(child)
-        elif isinstance(value, list):
-            for export in value:
-                child = cls.load(export, rootItem)
-                child.name = export
-                rootItem.appendChild(child)
-        else:
-            rootItem.name = value
+        areas_of_interest: list[AOI],
+        progressInterconnect: 'QtProgress'
+    ) -> 'RootItem':
+        rootItem = RootItem()
+        for aoi in areas_of_interest:
+            child = AOIItem(aoi, rootItem, progressInterconnect)
+            rootItem.appendChild(child)
         return rootItem
+
 
 class ExportModel(QtCore.QAbstractItemModel):
 
     def __init__(self, parent: Optional[QtCore.QObject] = None) -> None:
 
         super().__init__(parent)
-        self.rootItem = AOIItem()
-
+        self.rootItem: Optional[AOIItem] = None
+        # self.mapFromUrlToIndex: dict[str, QtCore.QModelIndex] = {}
 
     def index(self, row: int, column: int, parent: QtCore.QModelIndex = QtCore.QModelIndex()) -> QtCore.QModelIndex:
         parentItem = parent.internalPointer() if parent.isValid() else self.rootItem
@@ -72,9 +189,9 @@ class ExportModel(QtCore.QAbstractItemModel):
         if not index.isValid():
             return QtCore.QModelIndex()
 
-        childItem = index.internalPointer()
+        childItem: Union[ExportItem, AOIItem] = index.internalPointer()
         parentItem = childItem.parentItem()
-        if parentItem == self.rootItem:
+        if parentItem is self.rootItem:
             return QtCore.QModelIndex()
 
         return self.createIndex(parentItem.row(), 0, parentItem)
@@ -85,7 +202,6 @@ class ExportModel(QtCore.QAbstractItemModel):
         parentItem = parent.internalPointer() if parent.isValid() else self.rootItem
         return parentItem.childCount()
 
-
     def columnCount(self, parent: QtCore.QModelIndex = QtCore.QModelIndex()) -> int:
         return 1
 
@@ -93,10 +209,12 @@ class ExportModel(QtCore.QAbstractItemModel):
         if not index.isValid():
             return None
 
-        item = index.internalPointer()
+        item: Union[AOIItem, ExportItem] = index.internalPointer()
 
         if role == QtCore.Qt.ItemDataRole.DisplayRole and index.column() == 0:
             return item.name
+        # elif role == QtCore.Qt.ItemDataRole.UserRole:
+        #     return str(item.progress)
 
     def headerData(
             self,
@@ -108,10 +226,30 @@ class ExportModel(QtCore.QAbstractItemModel):
             return self.rootItem.data(section)
         return ""
 
-    def load(self, data: dict[str, list[str]]) -> None:
+    def load(self, data: list[AOI], progressInterconnect: 'QtProgress') -> None:
         self.beginResetModel()
-        self.rootItem = AOIItem.load(data)
+        self.rootItem = RootItem.load(data, progressInterconnect)
         self.endResetModel()
+        progressInterconnect.taskUpdated.connect(self._updateTask)
+        progressInterconnect.taskCompleted.connect(self._updateTask)
+
+    def _updateTask(self, _: 'ProgressTracking'):
+        for row in range(self.rowCount()):
+            aoi_index = self.index(row, 0)
+            n_exports = self.rowCount(parent=aoi_index)
+            export_index_top = self.index(0, 0, parent=aoi_index)
+
+            export_index_bottom = self.index(n_exports - 1, 0, parent=aoi_index)
+            self.dataChanged.emit(
+                export_index_top,
+                export_index_bottom,
+                [
+                    QtCore.Qt.ItemDataRole.DisplayRole,
+                    QtCore.Qt.ItemDataRole.UserRole
+                ]
+            )
 
     def clear(self) -> None:
-         self.load({})
+         self.beginResetModel()
+         self.rootItem = None
+         self.endResetModel()
