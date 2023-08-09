@@ -27,14 +27,13 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
             progress = item.progressInterconnect.export_progress[item.export["pk"]]
         except KeyError:
             # when we're not actually tracking download progress...
-            completed = 0
+            completed = -1  # minimum - 1 indicates progress hasn't started
             text = item.name
         else:
             completed = progress.int32_progress()
             text = str(progress)
 
         progressBarOption = QtWidgets.QStyleOptionProgressBar()
-        progressBarOption.rect = option.rect
         progressBarOption.state = option.state | QtWidgets.QStyle.StateFlag.State_Horizontal
         progressBarOption.palette = option.palette
         progressBarOption.minimum = 0
@@ -54,9 +53,10 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.TextFlag.TextSingleLine,
             text,
         )
-
-        progressBarOption.text = text
-        progressBarOption.fontMetrics = fontMetrics
+        progressBarOption.rect.setWidth(option.rect.width())
+        # cannot get left alignment working so we use painter.drawText directly
+        # progressBarOption.text = text
+        # progressBarOption.fontMetrics = fontMetrics
 
         painter.save()
         painter.setFont(progressFont)
@@ -64,6 +64,12 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
             QtWidgets.QStyle.ControlElement.CE_ProgressBar,
             progressBarOption,
             painter
+        )
+        # TODO: draw progress in right aligned text?
+        painter.drawText(
+            option.rect,
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.TextFlag.TextSingleLine,
+            text
         )
         painter.restore()
 
