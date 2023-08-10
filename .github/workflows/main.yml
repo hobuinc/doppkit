@@ -64,22 +64,17 @@ jobs:
         run: pyinstaller cli.spec
       - name: 'Make GUI Executable'
         run: pyinstaller gui.spec
-      - name: 'Zip Windows Executables'
-        if: runner.os == 'Windows'
-        run: |
-          &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit-cli.zip ./dist/doppkit-cli.exe
-          &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit.zip ./dist/doppkit.exe
       - name: 'Upload Windows GUI Artifact'
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v3
         with:
           name: 'doppkit-gui'
           path: |
-            dist/doppkit.zip
+            dist/doppkit.exe
       - name: 'Upload Windows CLI Artifact'
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v3
         with:
           name: 'doppkit-cli'
           path: |
-            dist/doppkit-cli.zip
+            dist/doppkit-cli.exe
