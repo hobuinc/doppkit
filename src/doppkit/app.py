@@ -33,7 +33,6 @@ class Application:
         override : bool, optional
             Tells doppkit if the files should be overwritten
         """
-        # self.token: str = os.getenv("GRID_ACCESS_TOKEN", token)
         self.token = token if token is not None else os.getenv("GRID_ACCESS_TOKEN", "")
         self.url = url
         self.threads = threads
@@ -53,7 +52,3 @@ class Application:
             f"URL: {self.url}\n"
             f"Run Method: {self.run_method}\n"
         )
-
-
-
-

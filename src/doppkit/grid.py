@@ -5,7 +5,7 @@ import warnings
 import logging
 
 import httpx
-from typing import Optional, Iterable, TypedDict
+from typing import Optional, Iterable, TypedDict, Union
 
 from .cache import cache
 
@@ -52,10 +52,14 @@ class Task(TypedDict):
 
 
 class Export(TypedDict):
+
     name: str
     datatype: str
-    export_Type: str
-    exportfiles: list[Exportfile]
+    export_type: str
+    exportfiles: Union[list[Exportfile], bool]
+    export_total_size: int
+    auxfile_total_size: int
+    complete_size: int
     file_export_options: str
     file_format_options: str
     hsrs: Optional[str]
@@ -72,6 +76,8 @@ class Export(TypedDict):
     user: str
     vsrs: Optional[str]
     zip_url: str
+
+Export.__optional_keys__ = frozenset({'export_total_size', 'auxfile_total_size', 'complete_size'})
 
 
 class AOI(TypedDict):
@@ -208,7 +214,6 @@ class Grid:
         export_pk
             Export PK to get a list of Exportfiles for
 
-
         Returns
         -------
         list of Exportfile
@@ -252,11 +257,9 @@ class Grid:
             j = json.loads(f.data)
             exports.append(j)
 
-        output = []
+        export_files = []
         for e in exports:
             ex = e['exports']
             for item in ex:
-                output.extend(iter(item['exportfiles']))
-        return output
-
-
+                export_files.extend(iter(item['exportfiles']))
+        return export_files

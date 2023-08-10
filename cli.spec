@@ -30,7 +30,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='doppkit-win64-cli.exe',
+    name='doppkit-cli',
     debug=False,
     bootloader_ignore_signals=False,
     exclude_binaries=False,
@@ -44,5 +44,6 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon="src\\doppkit\\resources\\grid-icon.ico"
+    icon="src/doppkit/gui/resources/grid-icon.ico",
+    manifest="doppkit.manifest"
 )

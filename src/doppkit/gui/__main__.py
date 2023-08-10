@@ -22,17 +22,17 @@ async def start_gui(app: 'Application'):
     qApp.setOrganizationName("Hobu")
     qApp.setStyle("fusion")
 
-    icon = QtGui.QIcon()
-    icon.addFile(
-        os.path.join(
-            str(resources.files("doppkit.resources")),
-            'grid-icon.ico'
-        )
+    icon_path = os.path.join(
+        str(resources.files("doppkit.gui.resources")),
+        "grid-icon.ico"
     )
 
-    qApp.setWindowIcon(icon)
-    window = Window(app)
-    window.setWindowIcon(icon)
+    qApp.setWindowIcon(
+        QtGui.QIcon(
+            icon_path
+        )
+    )
+    Window(app)
 
     # inspired by:
     # https://github.com/Debianissimo/instart/blob/3d90083de27b078fb1295bd407f4f1a27fd582e3/instart/frontend.py#L582
@@ -55,7 +55,8 @@ def main():
         log_level=logging.INFO,
         threads=5,
         run_method="GUI",
-        progress = False
+        progress=True,
+        override=False
     )
     # https://github.com/CabbageDevelopment/qasync/issues/68
     # the easy way breaks with Python 3.11, so we do the plumbing ourselves to work around it

@@ -21,17 +21,16 @@ class RichProgress:
         self.context_manager = context_manager
         self.tasks: dict[str, TaskID] = {}
 
-    def create_task(self, name: str, total: int):
+    def create_task(self, name: str, url: str, total: int):
         self.tasks[name] = self.context_manager.add_task(name, total=total)
 
-    def update(self, name: str, completed: int):
+    def update(self, name: str, url: str, completed: int):
         task = self.tasks[name]
         self.context_manager.update(task, completed=completed)
     
-    def complete_task(self, name: str):
-        task = self.tasks[name]
+    def complete_task(self, name: str, url: str):
+        task = self.tasks.pop(name)
         self.context_manager.update(task, visible=False)
-        del self.tasks[name]
 
 
 async def cache(app: 'Application', urls: Iterable[str], headers) -> list[Union[Exception, 'Content']]:

@@ -45,13 +45,13 @@ jobs:
           pyinstaller cli.spec
       - name: Zip Output
         run: |
-          &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit-win64-cli.zip ./dist/doppkit-win64-cli.exe
+          &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit-cli.zip ./dist/doppkit-cli.exe
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            dist/doppkit-win64-cli.zip
-            dist/doppkit-win64-cli.exe
+            dist/doppkit-cli.zip
+            dist/doppkit-cli.exe
   make_gui_executable:
     runs-on: windows-latest
     steps:
@@ -65,13 +65,12 @@ jobs:
         run: |
           python -m pip install pyinstaller .[GUI]
           pyinstaller gui.spec
-          mv ./dist/doppkit.exe ./dist/doppkit-win64-gui.exe
       - name: Zip Output
         run: |
-          &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit-win64-gui.zip ./dist/doppkit-win64-gui.exe
+          &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit.zip ./dist/doppkit.exe
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            dist/doppkit-win64-gui.zip
-            dist/doppkit-win64-gui.exe
+            dist/doppkit.zip
+            dist/doppkit.exe
