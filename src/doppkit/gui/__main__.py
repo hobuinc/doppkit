@@ -32,7 +32,7 @@ async def start_gui(app: 'Application'):
             icon_path
         )
     )
-    Window(app)
+    window = Window(app)
 
     # inspired by:
     # https://github.com/Debianissimo/instart/blob/3d90083de27b078fb1295bd407f4f1a27fd582e3/instart/frontend.py#L582
