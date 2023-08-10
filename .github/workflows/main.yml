@@ -1,0 +1,85 @@
+name: Main
+
+on:
+  push:
+    branches-ignore: "depenabot/**"
+  pull_request:
+    paths-ignore:
+      - '**.md'
+
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: 1
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  main:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+      - name: "Install Dependencies"
+        run: |
+          python -m pip install .[GUI]
+      - name: "Install Linux VirtualDisplay"
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install --no-install-recommends -y \
+            libxkbcommon-x11-0 \
+            x11-utils \
+            libyaml-dev \
+            libegl1-mesa \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-randr0 \
+            libxcb-render-util0 \
+            libxcb-xinerama0 \
+            libopengl0 \
+            libxcb-cursor0
+      - name: 'Debug Info'
+        run: |
+          echo python location: `which python`
+          echo python version: `python --version`
+          echo installed packages
+          python -m pip list
+        shell: bash
+        env:
+          QT_DEBUG_PLUGINS: 1
+      - name: 'Install PyInstaller'
+        run:  python -m pip install pyinstaller
+      - name: 'Make CLI Executable'
+        run: pyinstaller cli.spec
+      - name: 'Make GUI Executable'
+        run: pyinstaller gui.spec
+      - name: 'Zip Windows Executables'
+        if: runner.os == 'Windows'
+        run: |
+          &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit-cli.zip ./dist/doppkit-cli.exe
+          &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit-gui.zip ./dist/doppkit-gui.exe
+      - name: 'Upload Windows GUI Artifact'
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v3
+        with:
+          name: 'doppkit-gui'
+          path: |
+            dist/doppkit-gui.zip
+      - name: 'Upload Windows CLI Artifact'
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v3
+        with:
+          name: 'doppkit-cli'
+          path: |
+            dist/doppkit-cli.zip
