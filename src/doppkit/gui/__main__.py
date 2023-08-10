@@ -22,17 +22,18 @@ async def start_gui(app: 'Application'):
     qApp.setOrganizationName("Hobu")
     qApp.setStyle("fusion")
 
-    icon = QtGui.QIcon()
-    icon.addFile(
-        os.path.join(
-            str(resources.files("doppkit.resources")),
-            'grid-icon.ico'
-        )
+    icon_path = os.path.join(
+        str(resources.files("doppkit.gui.resources")),
+        "grid-icon.ico"
     )
 
-    qApp.setWindowIcon(icon)
+    qApp.setWindowIcon(
+        QtGui.QIcon(
+            icon_path
+        )
+    )
     window = Window(app)
-    window.setWindowIcon(icon)
+    # window.setWindowIcon(icon)
 
     # inspired by:
     # https://github.com/Debianissimo/instart/blob/3d90083de27b078fb1295bd407f4f1a27fd582e3/instart/frontend.py#L582

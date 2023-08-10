@@ -29,9 +29,11 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
             # when we're not actually tracking download progress...
             completed = -1  # minimum - 1 indicates progress hasn't started
             text = item.name
+            speed = ""
         else:
             completed = progress.int32_progress()
-            text = str(progress)
+            text = progress.export_name
+            speed = progress.display_rate
 
         progressBarOption = QtWidgets.QStyleOptionProgressBar()
         progressBarOption.state = option.state | QtWidgets.QStyle.StateFlag.State_Horizontal
@@ -40,38 +42,50 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
         progressBarOption.maximum = (2 ** 32 - 1) // 2
         progressBarOption.progress = completed
         progressBarOption.textVisible = True
+        progressBarOption.rect = option.rect
 
-        progressFont = QtGui.QFont()
-        progressFont.setPointSize(12)
-        progressFont.setStyleHint(QtGui.QFont.StyleHint.SansSerif)
-        fontMetrics = QtGui.QFontMetrics(progressFont)
+        fontMetrics = QtGui.QFontMetrics(option.font)
 
-        text = fontMetrics.elidedText(text, QtCore.Qt.TextElideMode.ElideMiddle, option.rect.width())
+        speed_report_rect = fontMetrics.boundingRect(
+            option.rect,
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.TextFlag.TextSingleLine,
+            speed
+        )
 
-        progressBarOption.rect = fontMetrics.boundingRect(
+        item_name = fontMetrics.elidedText(
+            text,
+            QtCore.Qt.TextElideMode.ElideMiddle,
+            option.rect.width() - speed_report_rect.width()
+        )
+
+        text_name_rect = fontMetrics.boundingRect(
             option.rect,
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.TextFlag.TextSingleLine,
-            text,
+            item_name,
         )
-        progressBarOption.rect.setWidth(option.rect.width())
-        # cannot get left alignment working so we use painter.drawText directly
-        # progressBarOption.text = text
-        # progressBarOption.fontMetrics = fontMetrics
+
+        progressBarOption.fontMetrics = fontMetrics
 
         painter.save()
-        painter.setFont(progressFont)
+        painter.setFont(option.font)
         QtWidgets.QApplication.style().drawControl(
             QtWidgets.QStyle.ControlElement.CE_ProgressBar,
             progressBarOption,
             painter
         )
-        # TODO: draw progress in right aligned text?
         painter.drawText(
-            option.rect,
+            text_name_rect,
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.TextFlag.TextSingleLine,
-            text
+            item_name
         )
+        painter.drawText(
+            speed_report_rect,
+            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.TextFlag.TextSingleLine,
+            speed
+        )
+
         painter.restore()
+
 
 
 class ExportItem(QtCore.QObject):

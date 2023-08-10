@@ -469,6 +469,10 @@ class ProgressTracking:
         self.elapsed = now
 
     def update_download_rate(self):
+        if self.is_complete:
+            self.display_rate = "Complete"
+            return None
+
         for exponent, prefix in zip((6, 3, 0), ("M", "k", "")):
             multiple = 10 ** exponent
             if self.rate > multiple:
@@ -479,7 +483,4 @@ class ProgressTracking:
         return None
 
     def __str__(self):
-        if self.is_complete:
-            return f"{self.export_name} - Finished"
-
         return f"{self.export_name} - ({self.display_rate})"
