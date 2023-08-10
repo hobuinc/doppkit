@@ -1,4 +1,3 @@
-import typing
 from typing import Optional, Union, TYPE_CHECKING
 from qtpy import QtCore, QtGui, QtWidgets
 
@@ -52,21 +51,17 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
             QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.TextFlag.TextSingleLine,
             speed
         )
-
         item_name = fontMetrics.elidedText(
             text,
             QtCore.Qt.TextElideMode.ElideMiddle,
             option.rect.width() - speed_report_rect.width()
         )
-
         text_name_rect = fontMetrics.boundingRect(
             option.rect,
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.TextFlag.TextSingleLine,
             item_name,
         )
-
         progressBarOption.fontMetrics = fontMetrics
-
         painter.save()
         painter.setFont(option.font)
         QtWidgets.QApplication.style().drawControl(
@@ -84,9 +79,8 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
             QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.TextFlag.TextSingleLine,
             speed
         )
-
         painter.restore()
-
+        return None
 
 
 class ExportItem(QtCore.QObject):
@@ -238,6 +232,7 @@ class ExportModel(QtCore.QAbstractItemModel):
 
         if role == QtCore.Qt.ItemDataRole.DisplayRole and index.column() == 0:
             return item.name
+        return None
 
     def headerData(
             self,
