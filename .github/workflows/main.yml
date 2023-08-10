@@ -68,14 +68,14 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit-cli.zip ./dist/doppkit-cli.exe
-          &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit-gui.zip ./dist/doppkit-gui.exe
+          &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit.zip ./dist/doppkit.exe
       - name: 'Upload Windows GUI Artifact'
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v3
         with:
           name: 'doppkit-gui'
           path: |
-            dist/doppkit-gui.zip
+            dist/doppkit.zip
       - name: 'Upload Windows CLI Artifact'
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v3

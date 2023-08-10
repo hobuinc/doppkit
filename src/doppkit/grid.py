@@ -104,7 +104,7 @@ class Grid:
     async def get_aois(self, pk: Optional[int]=None) -> list[AOI]:
         url_args = 'intersections=false&intersection_geoms=false'
         if pk:
-            url_args += "&export_full=true&sort=pk"  # TODO: reset to export_full=false
+            url_args += "&export_full=false&sort=pk"
             aoi_endpoint = f"{self.args.url}{aoi_endpoint_ext}/{pk}?{url_args}"
         else:
             # Grab full dictionary for the export and parse out the download urls

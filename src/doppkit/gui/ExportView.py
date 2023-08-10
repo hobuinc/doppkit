@@ -1,3 +1,4 @@
+import typing
 from typing import Optional, Union, TYPE_CHECKING
 from qtpy import QtCore, QtGui, QtWidgets
 
@@ -225,7 +226,11 @@ class ExportModel(QtCore.QAbstractItemModel):
     def columnCount(self, parent: QtCore.QModelIndex = QtCore.QModelIndex()) -> int:
         return 1
 
-    def data(self, index: QtCore.QModelIndex, role=QtCore.Qt.ItemDataRole.DisplayRole) -> Optional[str]:
+    def data(
+        self,
+        index: QtCore.QModelIndex,
+        role=QtCore.Qt.ItemDataRole.DisplayRole
+    ) -> Optional[str]:
         if not index.isValid():
             return None
 
@@ -233,8 +238,6 @@ class ExportModel(QtCore.QAbstractItemModel):
 
         if role == QtCore.Qt.ItemDataRole.DisplayRole and index.column() == 0:
             return item.name
-        # elif role == QtCore.Qt.ItemDataRole.UserRole:
-        #     return str(item.progress)
 
     def headerData(
             self,

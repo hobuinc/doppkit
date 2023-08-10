@@ -67,10 +67,10 @@ jobs:
           pyinstaller gui.spec
       - name: Zip Output
         run: |
-          &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit-gui.zip ./dist/doppkit-gui.exe
+          &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit.zip ./dist/doppkit.exe
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            dist/doppkit-gui.zip
-            dist/doppkit-gui.exe
+            dist/doppkit.zip
+            dist/doppkit.exe

@@ -35,7 +35,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='doppkit-gui',
+    name='doppkit',
     debug=False,
     bootloader_ignore_signals=False,
     exclude_binaries=False,
