@@ -3,19 +3,20 @@ import logging
 import pathlib
 import os
 
+from urllib.parse import urlparse
 
 class Application:
     def __init__(
             self,
-            token: str=None,
-            url: str=None,
+            token: str = None,
+            url: str = None,
             log_level=logging.ERROR,
             run_method="API",
-            threads: int=20,
+            threads: int = 20,
             progress: bool = False,
             disable_ssl_verification: bool = False,
             override: bool = False
-        ) -> None:
+    ) -> None:
         """_summary_
 
         Parameters
@@ -42,9 +43,22 @@ class Application:
 
         self.run_method = run_method
         self.log_level = log_level
+
+        if not disable_ssl_verification:
+            # disable ssl_verification on the following servers:
+            # "https://grid.nga.ic.gov" and "https://grid.nga.smil.mil"
+            exclude_hosts = set(
+                [
+                    urlparse(url).hostname
+                    for url in ("https://grid.nga.smil.mil", "https://grid.nga.ic.gov")
+                ]
+            )
+
+            if urlparse(url).hostname in exclude_hosts:
+                disable_ssl_verification = True
         self.disable_ssl_verification = disable_ssl_verification
         self.directory = os.fsdecode(pathlib.Path.home() / "Downloads")
-    
+
     def __repr__(self) -> str:
         return (
             "Doppkit Application\n"
