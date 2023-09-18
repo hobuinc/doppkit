@@ -2,7 +2,8 @@ import logging
 from pathlib import Path
 
 from doppkit.grid import Grid
-from doppkit.cli.cache import cache, Content
+from doppkit.cli.cache import cache
+from doppkit.cache import Content
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
