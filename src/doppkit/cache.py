@@ -29,7 +29,10 @@ class Progress(Protocol):
 
 class Content:
     def __init__(
-        self, headers, filename: Optional[pathlib.Path] = None, args=None
+        self,
+        headers,
+        filename: Optional[pathlib.Path] = None,
+        args: 'Optional[Application]'=None
     ):
         self.directory = None
         self.headers = headers
