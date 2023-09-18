@@ -2,10 +2,14 @@ import logging
 from pathlib import Path
 
 from doppkit.grid import Grid
-from doppkit.cli.cache import cache
+from doppkit.cli.cache import cache, Content
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from doppkit.app import Application
 
 
-async def sync(args, pk: str):
+async def sync(args: 'Application', pk: str) -> list[Content]:
     """The main function for our script."""
 
     # Create a directory into which our downloads will go
@@ -43,11 +47,12 @@ async def sync(args, pk: str):
         )
 
         # Skip this file if we've already downloaded it
-        if not args.overwrite and download_destination.exists():
+        if not args.override and download_destination.exists():
             logging.debug(f"File already exists, skipping: {download_destination}")
         else:
             urls.append(download_url)
     headers = {"Authorization": f"Bearer {args.token}"}
     logging.debug(urls, headers)
 
-    _ = await cache(args, urls, headers)
+    files = await cache(args, urls, headers)
+    return files

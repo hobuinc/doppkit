@@ -58,22 +58,22 @@ def cli(ctx, token, url, log_level, threads, progress, disable_ssl_verification)
 @click.option("--timeout", help="Connection timeout", default=20)
 @click.option("--start-id", help="Export ID to resume fetching", type=int, default=0)
 @click.option(
-    "--overwrite",
+    "--override",
     default=False,
     is_flag=True,
     type=bool,
-    help="Overwrite existing fetches of the same name",
+    help="Override existing fetches of the same name",
 )
 
 @click.option("--directory", help="Output directory to write", default="downloads", type=pathlib.Path)
 @click.option("--filter", help="AOI note filter query", default="")
 @click.argument("pk",)
-def sync(app, timeout, start_id, overwrite, directory, filter, pk):
+def sync(app, timeout, start_id, override, directory, filter, pk):
     from doppkit.cli.sync import sync as syncFunction
     app.start_id = start_id
     app.timeout = timeout
     app.command = "sync"
-    app.overwrite = overwrite
+    app.override = override
     app.directory = directory
     app.filter = filter
     app.pk = pk
