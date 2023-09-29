@@ -9,6 +9,7 @@ from typing import Optional, Iterable, TypedDict, Union
 
 from .cache import cache
 
+logger = logging.getLogger(__name__)
 
 aoi_endpoint_ext = "/api/v3/aois"
 export_endpoint_ext = "/api/v3/exports"
@@ -100,8 +101,10 @@ class Grid:
         self.args = args
         # let's quiet down the HTTPX logger
         logging.getLogger("httpx").setLevel(logging.WARNING)
+        logger.setLevel(self.args.log_level)
 
     async def get_aois(self, pk: Optional[int]=None) -> list[AOI]:
+        logger.debug(f"Getting export information for aoi_pk={pk} from {self.args.url}")
         url_args = 'intersections=false&intersection_geoms=false'
         if pk:
             url_args += "&export_full=false&sort=pk"
@@ -119,16 +122,23 @@ class Grid:
         try:
             response = json.load(files[0].target)
         except IndexError as e:
+            logger.error(f"GRiD returned no products for AOI {pk}")
             raise RuntimeError(f"GRiD returned no products for AOI {pk}") from e
         except AttributeError as e:
             if isinstance(files[0], Exception):
+                logger.error(f"Doppkit cache function returned the following exception: {files[0]}")
                 raise files[0] from e
+            elif isinstance(files[0], httpx.Response):
+                logger.error(f"{self.args.url} returned the following non-ok response {str(files[0])}")
+                raise RuntimeError(f'{files[0]} returned from {self.args.url}') from e
             else:
+                logger.error(f"Doppkit cache function returned unexpected type {type(files[0])}")
                 raise TypeError(
                     f"Unexpected type {type(files[0])} returned from cache"
                 ) from e
         else:
             if "error" in response:
+                logger.error(f"GRiD returned the following error: {response['error']}")
                 raise RuntimeError(response['error'])
         return response["aois"]
 
@@ -203,7 +213,8 @@ class Grid:
         if r.status_code == httpx.codes.OK:
             output = r.json()["tasks"]
         else:
-            raise RuntimeError(f"GRiD Taskpoint Endpoint Returned Error {r.status_code}")
+            logger.warning(f"GRiD task endpoint returned error {r.status_code}")
+            raise RuntimeError(f"GRiD Task Endpoint Returned Error {r.status_code}")
         return output
 
 
@@ -231,24 +242,24 @@ class Grid:
         try:
             response = json.load(export_files[0].target)
         except IndexError:
-            warnings.warn(
-                f"Export: {export_pk} returned no export files to download",
-                stacklevel=2
+            logger.warn(
+                f"Export: {export_pk} returned no export files to download"
             )
             return []
         except AttributeError as e:
             if isinstance(export_files[0], Exception):
+                logger.error(f"Doppkit Cache Function Returned the following exception: {export_files[0]}")
                 raise export_files[0] from e
             else:
+                logger.error(f"Doppkit cache function returned unexpected type: {type(export_files[0])}")
                 raise TypeError(
                     f"Cache Function returned unknown type {type(export_files[0])}"
                 ) from e
         else:
             if "error" in response:
-                warnings.warn(
+                logger.warn(
                     f"Attempting to access {export_pk=} resulted in the following error "
-                    f"from GRiD: {response['error']}",
-                    stacklevel=2
+                    f"from GRiD: {response['error']}"
                 )
                 return []
 

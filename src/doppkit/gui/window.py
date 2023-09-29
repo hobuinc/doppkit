@@ -14,6 +14,10 @@ import qasync
 
 
 from .ExportView import ExportModel, ExportDelegate
+from .LogWidget import LoggingDialog
+from .MenuBar import MenuBar
+
+logger = logging.getLogger("doppkit")
 
 class ExportFileProgress(NamedTuple):
     url: str
@@ -150,6 +154,7 @@ class Window(QtWidgets.QMainWindow):
     def __init__(self, doppkit_application, *args):
         super().__init__(*args)
 
+
         self.setGeometry(300, 300, 300, 220)
         self.setWindowTitle(f"doppkit - {__version__}")
         self.doppkit = doppkit_application
@@ -158,16 +163,13 @@ class Window(QtWidgets.QMainWindow):
 
         self.progressTracker = QtProgress()
 
-        self.exportView = TreeView()
-        self.exportView.setSelectionMode(
-            QtWidgets.QAbstractItemView.SelectionMode.NoSelection
-        )
-        self.exportView.setWordWrap(False)
-        self.exportView.setTextElideMode(QtCore.Qt.TextElideMode.ElideMiddle)
-        self.exportView.header().setSectionResizeMode(
-            QtWidgets.QHeaderView.ResizeMode.ResizeToContents
-        )
-        self.exportView.setUniformRowHeights(True)
+        # Download Progress Viewer
+        self.exportView = None
+
+        # Log Viewer
+        self.logView = LoggingDialog()
+
+        self.setMenuBar(MenuBar())
 
         contents = QtWidgets.QWidget()
         self.setCentralWidget(contents)
@@ -325,6 +327,9 @@ class Window(QtWidgets.QMainWindow):
         lineEdit = self.sender().parent()
         lineEdit.setText(directory)
 
+    def showLogView(self):
+        raise self.logView.show()
+
     def gridURLChanged(self):
         self.doppkit.url = QtCore.QUrl.fromUserInput(self.sender().currentText()).url()
         setting = QtCore.QSettings()
@@ -359,6 +364,18 @@ class Window(QtWidgets.QMainWindow):
         self.AOIs = await api.get_aois(self.AOI_pks[0])
         model = ExportModel()
         model.clear()
+
+        self.exportView = TreeView()
+        self.exportView.setSelectionMode(
+            QtWidgets.QAbstractItemView.SelectionMode.NoSelection
+        )
+        self.exportView.setWordWrap(False)
+        self.exportView.setTextElideMode(QtCore.Qt.TextElideMode.ElideMiddle)
+        self.exportView.header().setSectionResizeMode(
+            QtWidgets.QHeaderView.ResizeMode.ResizeToContents
+        )
+        self.exportView.setUniformRowHeights(True)
+
         self.exportView.setModel(model)
         model.load(self.AOIs, self.progressInterconnect)
 
@@ -415,7 +432,7 @@ class Window(QtWidgets.QMainWindow):
                     download_size += export_file["filesize"]
                     # TODO: compare filesizes, not just if it exists
                     if not self.doppkit.override and download_destination.exists():
-                        logging.debug(f"File already exists, skipping {filename}")
+                        logger.debug(f"File already exists, skipping {filename}")
                     else:
                         urls.append(export_file["url"])
                         self.progressInterconnect.urls_to_export_pk[export_file["url"]] = export["pk"]
