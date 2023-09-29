@@ -9,7 +9,10 @@ from qtpy import QtWidgets, QtGui
 
 import qasync
 from doppkit.gui.window import Window
+from doppkit.gui.LogWidget import QtLogHandler
 from doppkit.app import Application
+
+logger = logging.getLogger("doppkit")
 
 
 async def start_gui(app: 'Application'):
@@ -21,6 +24,18 @@ async def start_gui(app: 'Application'):
     qApp.setApplicationName("doppkit")
     qApp.setOrganizationName("Hobu")
     qApp.setStyle("fusion")
+
+    qt_handler = QtLogHandler(qApp)
+    logger.addHandler(qt_handler)
+
+    # TODO remove debug log handler
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setLevel(app.log_level)
+    formatter = logging.Formatter("%(name)-35s: %(levelname)-8s %(message)s")
+    stream_handler.setFormatter(formatter)
+    logger.setLevel(app.log_level)
+    logger.addHandler(stream_handler)
+    # END debug log handler block
 
     icon_path = os.path.join(
         str(resources.files("doppkit.gui.resources")),
@@ -52,7 +67,7 @@ def main():
     app = Application(
         token=None,
         url="https://grid.nga.mil/grid",
-        log_level=logging.INFO,
+        log_level=logging.DEBUG,
         threads=5,
         run_method="GUI",
         progress=True,

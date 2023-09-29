@@ -16,6 +16,8 @@ from typing import Protocol, Optional, TYPE_CHECKING, Union, Iterable
 if TYPE_CHECKING:
     from .app import Application
 
+logger = logging.getLogger(__name__)
+
 class Progress(Protocol):
 
     def update(self, name: str, url: str, completed: int) -> None:
@@ -54,7 +56,7 @@ class Content:
         filename = None
         if "content-disposition" in [key.lower() for key in headers.keys()]:
             disposition = headers["Content-Disposition"]
-            logging.debug(f"disposition '{disposition}'")
+            logger.debug(f"content-disposition: '{disposition}'")
             if "attachment" in disposition.lower():
                 # grab Aioysius_PC_20200121.zip from 'attachment; filename="Aioysius_PC_20200121.zip"'
                 attachment = parse_options_header(headers["Content-Disposition"])
@@ -87,14 +89,13 @@ async def cache(
         urls: Iterable[str],
         headers: dict[str, str],
         progress: Optional[Progress]=None
-) -> list[Union[Content, Exception]]:
+) -> list[Union[Content, Exception, httpx.Response]]:
     limits = httpx.Limits(
         max_keepalive_connections=app.threads, max_connections=app.threads
     )
     timeout = httpx.Timeout(20.0, connect=40.0)
     headers['user-agent'] = f"doppkit/{__version__}/{app.run_method}"
     headers["Authorization"] = f"Bearer {app.token}"
-
     async with httpx.AsyncClient(
         timeout=timeout, limits=limits, verify=not app.disable_ssl_verification
     ) as client:
@@ -122,11 +123,15 @@ async def cache_url(
         headers: dict[str, str],
         client: httpx.AsyncClient,
         progress: Optional[Progress] = None
-) -> Content:
+) -> Union[Content, httpx.Response]:
     limit = args.limit
+    logger.debug(f"Starting to cache {url}")
     async with limit:
         request = client.build_request("GET", url, headers=headers, timeout=None)
         response = await client.send(request, stream=True)
+        
+        if response.status_code != httpx.codes.OK:
+            return response
 
         filename = None  # placeholder
         total = max(0, int(response.headers.get("Content-length", 0)))

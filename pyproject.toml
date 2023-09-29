@@ -8,7 +8,7 @@ dependencies = [
     "httpx",
     "rich",
     "click",
-    "aiofiles"
+    "aiofiles",
 ]
 classifiers = [
   "Development Status :: 4 - Beta",

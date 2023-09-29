@@ -11,7 +11,7 @@ class Application:
             self,
             token: str = None,
             url: str = None,
-            log_level=logging.ERROR,
+            log_level=logging.INFO,
             run_method="API",
             threads: int = 20,
             progress: bool = False,
@@ -30,7 +30,7 @@ class Application:
         url : str, optional
             URL of the grid server to use, by default None
         log_level : logging.Level, optional
-            Logging level to set doppkit application to, by default logging.ERROR
+            Logging level to set doppkit application to, by default logging.INFO
         run_method : str, optional
             how doppkit is being run, recognized options are CLI, GUI and API, by
             default "API"

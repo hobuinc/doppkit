@@ -5,6 +5,7 @@ import pathlib
 
 from doppkit.app import Application
 
+logger = logging.getLogger(__name__)
 
 @click.group()
 @click.option(
