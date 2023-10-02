@@ -130,7 +130,8 @@ async def cache_url(
         request = client.build_request("GET", url, headers=headers, timeout=None)
         response = await client.send(request, stream=True)
         
-        if response.status_code != httpx.codes.OK:
+        if response.is_error:
+            logger.error(f"GRiD returned an error code {response.status_code} with message: {response.text}")
             return response
 
         filename = None  # placeholder
