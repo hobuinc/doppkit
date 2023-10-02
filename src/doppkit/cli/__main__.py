@@ -40,7 +40,6 @@ def cli(ctx, token, url, log_level, threads, progress, disable_ssl_verification)
     logging.basicConfig(level=numeric_level)
 
     # Log program args
-    logging.debug(f"Log level: {log_level}")
 
     app = Application(
         token=token,
