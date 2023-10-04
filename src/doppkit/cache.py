@@ -131,6 +131,7 @@ async def cache_url(
         response = await client.send(request, stream=True)
         
         if response.is_error:
+            await response.aread()
             logger.error(f"GRiD returned an error code {response.status_code} with message: {response.text}")
             return response
 
