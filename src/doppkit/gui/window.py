@@ -286,6 +286,13 @@ class Window(QtWidgets.QMainWindow):
            self.restoreGeometry(geometry)
         settings.endGroup()
 
+        # read SSL White list settings
+        ssl_white_list = settings.value("grid/ssl_url_white_list", None)
+        if ssl_white_list is None:
+            # setting default URLs to skip
+            ssl_white_list = ["https://grid.nga.smil.mil", "https://grid.nga.ic.gov"]
+            settings.setValue("grid/ssl_url_white_list", ssl_white_list)
+
         # populate fields with previously stored values or defaults otherwise
         tokenLineEdit.setText(settings.value("grid/token"))
 
