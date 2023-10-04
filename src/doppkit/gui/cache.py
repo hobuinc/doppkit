@@ -1,5 +1,6 @@
 from typing import Iterable, Union, TYPE_CHECKING
 from urllib.parse import urlparse
+import logging
 
 from qtpy.QtCore import QSettings
 
@@ -10,6 +11,7 @@ from ..cache import cache as cache_generic
 if TYPE_CHECKING:
     from .window import QtProgress
 
+logger = logging.getLogger(__name__)
 
 async def cache(
         app: Application,
@@ -37,18 +39,17 @@ async def cache(
     """
     # need to determine if we should skip SSL verification...
 
-    # first, is SSL verification eanbled?
+    # first, is SSL verification enabled?
     settings = QSettings()
     enable_ssl = settings.value("grid/ssl_verification")
     # if enabled, check the other elements...
     if enable_ssl:
         # check if the GRiD URL is in the white-list
-        urls = settings.value("grid/ssl_url_white_list", [])
-        whitelisted_host_names = {urlparse(url).hostname for url in urls}
+        whiltelisted_urls = settings.value("grid/ssl_url_white_list", [])
+        whitelisted_host_names = {urlparse(url).hostname for url in whiltelisted_urls}
         hostname = urlparse(app.url).hostname
         if hostname in whitelisted_host_names:
             enable_ssl = False
-
+    logger.debug(f"Caching with ssl enabled: {enable_ssl}")
     app.disable_ssl_verification = not enable_ssl
-
     return await cache_generic(app, urls, headers, progress=progress)

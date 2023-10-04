@@ -231,9 +231,9 @@ class SSLSettings(SettingsTabContents):
         cert_file = os.fsdecode(self.sender().text())
         if os.path.isfile(cert_file):
             os.environ["SSL_CERT_FILE"] = cert_file
-            logger.debug(f"Setting variable SSL_CERT_FILE to {cert_file}")
+            logger.debug("SSL_CERT_FILE set")
         else:
-            logger.warning(f"Did not set SSL_CERT_FILE to {cert_file} as it is not a file")
+            logger.warning("SSL_CERT_FILE was not set due to entry not being a file")
         return None
 
     @Slot()
