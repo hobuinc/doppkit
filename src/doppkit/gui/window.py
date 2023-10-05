@@ -10,6 +10,8 @@ import pathlib
 import logging
 import math
 import time
+from urllib.parse import urlparse
+
 import qasync
 
 
@@ -362,7 +364,23 @@ class Window(QtWidgets.QMainWindow):
     async def listExports(self):
         self.buttonList.setEnabled(False)
         # TODO: this should accept a list of AOIs
-        # get AOI objects from GRiD
+
+        # need to determine if we should skip SSL verification...
+        # first, is SSL verification enabled?
+        settings = QtCore.QSettings()
+        enable_ssl = settings.value("grid/ssl_verification")
+        # if enabled, check the other elements...
+        if enable_ssl:
+            # check if the GRiD URL is in the white-list
+            whitelisted_urls = settings.value("grid/ssl_url_white_list", [])
+            whitelisted_host_names = {urlparse(url).hostname for url in whitelisted_urls}
+            hostname = urlparse(self.doppkit.url).hostname
+            if hostname in whitelisted_host_names:
+                enable_ssl = False
+        enabled = "enabled" if enable_ssl else "disabled"
+        logger.debug(f"POSTing to GRiD with SSL {enabled}")
+        self.doppkit.disable_ssl_verification = not enable_ssl
+
         api = Grid(self.doppkit)
         if not self.AOI_pks:
             # there is no AOI entered...

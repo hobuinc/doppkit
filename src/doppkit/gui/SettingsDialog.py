@@ -1,11 +1,14 @@
-from enum import IntEnum, auto
+from enum import IntEnum
 import logging
 import os
 
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from qtpy.QtGui import QAbstractFileIconProvider, QValidator
 from qtpy.QtWidgets import QDialog, QFileDialog, QGroupBox, QLineEdit, QHBoxLayout, QVBoxLayout, QLabel, QWidget, QRadioButton, QListWidget, QFileIconProvider, QTabWidget, QDialogButtonBox, QPushButton, QListWidgetItem
 from qtpy.QtCore import QObject, Slot, Qt, QSettings, QStandardPaths, QUrl
+
+if TYPE_CHECKING:
+    from .window import Window
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +75,7 @@ class SSLSettings(SettingsTabContents):
 
     def __init__(self, parent: 'SettingsDialog') -> None:
         super().__init__(parent)
+        settings = QSettings()
 
         name = "SSL Settings"
         self.setAccessibleName(name)
@@ -83,8 +87,13 @@ class SSLSettings(SettingsTabContents):
         enabledRadio = QRadioButton("Enabled")
         disabledRadio = QRadioButton("Disabled")
         # don't need to connect the disabled button ...
-        enabledRadio.setChecked(True)
-        enabledRadio.toggled.connect(self.toggleUIElements)
+
+        if settings.value("grid/ssl_verification"):
+            enabledRadio.setChecked(True)
+        else:
+            disabledRadio.setChecked(True)
+
+        enabledRadio.toggled.connect(self.enableSSL)
 
         sslToggleLayout.addWidget(enabledRadio)
         sslToggleLayout.addWidget(disabledRadio)
@@ -100,7 +109,6 @@ class SSLSettings(SettingsTabContents):
 
         self.listWidget = QListWidget()
         presetUrlsLabel.setBuddy(self.listWidget)
-        settings = QSettings()
         white_list_urls = settings.value("grid/ssl_url_white_list", None)
 
         if white_list_urls is not None:
@@ -282,7 +290,7 @@ class SSLSettings(SettingsTabContents):
         sslFileEdit.setText(filepath)
 
     @Slot(bool)
-    def toggleUIElements(self, checked: bool):
+    def enableSSL(self, checked: bool):
         otherLayout = self.settingsContentLayout.itemAt(1)
         if otherLayout is None:
             # layout isn't finished populating

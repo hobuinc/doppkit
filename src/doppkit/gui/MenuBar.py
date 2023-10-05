@@ -13,6 +13,12 @@ class MenuBar(QMenuBar):
         # intentionally do not pass a parent to the menu bar...
         super().__init__(None)
 
+        for widget in QApplication.instance().topLevelWidgets():
+            if isinstance(widget, QMainWindow):
+                self.mainWindow = widget
+                break
+        else:
+            raise RuntimeError("Main Window not Found")
         self.fileMenu = FileMenu(self)
         self.viewMenu = ViewMenu(self)
         self.helpMenu = QMenu("Help", self)
@@ -28,6 +34,7 @@ class FileMenu(QMenu):
         if isinstance(title, str):
             super().__init__(title, parent)
         else:
+            parent, title = title, ""
             super().__init__(parent)
         self.setTitle("File")
         self.settingsDialog: typing.Optional['SettingsDialog'] = None
@@ -44,7 +51,7 @@ class FileMenu(QMenu):
     @Slot()
     def invokeSettings(self):
         if self.settingsDialog is None:
-            self.settingsDialog = SettingsDialog()
+            self.settingsDialog = SettingsDialog(self)
             self.settingsDialog.rejected.connect(self._resetSettingsDialog)
             self.settingsDialog.show()
     
@@ -69,6 +76,7 @@ class ViewMenu(QMenu):
         if isinstance(title, str):
             super().__init__(title, parent)
         else:
+            parent, title = title, ""
             super().__init__(parent)
         self.setTitle("View")
         self._viewLogAction()
