@@ -87,10 +87,11 @@ class SSLSettings(SettingsTabContents):
         enabledRadio = QRadioButton("Enabled")
         disabledRadio = QRadioButton("Disabled")
         # don't need to connect the disabled button ...
-
-        if settings.value("grid/ssl_verification"):
+        if settings.value("grid/ssl_verification", type=bool):
+            logger.debug("SSL verification is set to enabled")
             enabledRadio.setChecked(True)
         else:
+            logger.debug("SSL verification is set to disabled")
             disabledRadio.setChecked(True)
 
         enabledRadio.toggled.connect(self.enableSSL)
@@ -291,6 +292,7 @@ class SSLSettings(SettingsTabContents):
 
     @Slot(bool)
     def enableSSL(self, checked: bool):
+        logger.info(f"Toggling Verify SSL to {checked}")
         otherLayout = self.settingsContentLayout.itemAt(1)
         if otherLayout is None:
             # layout isn't finished populating

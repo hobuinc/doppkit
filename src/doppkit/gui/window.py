@@ -372,7 +372,7 @@ class Window(QtWidgets.QMainWindow):
         # if enabled, check the other elements...
         if enable_ssl:
             # check if the GRiD URL is in the white-list
-            whitelisted_urls = settings.value("grid/ssl_url_white_list", [])
+            whitelisted_urls = settings.value("grid/ssl_url_white_list", [], type=list)
             whitelisted_host_names = {urlparse(url).hostname for url in whitelisted_urls}
             hostname = urlparse(self.doppkit.url).hostname
             if hostname in whitelisted_host_names:
