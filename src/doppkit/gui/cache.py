@@ -1,4 +1,5 @@
 from typing import Iterable, Union, TYPE_CHECKING
+import logging
 
 from ..app import Application
 from ..cache import Content
@@ -7,6 +8,7 @@ from ..cache import cache as cache_generic
 if TYPE_CHECKING:
     from .window import QtProgress
 
+logger = logging.getLogger(__name__)
 
 async def cache(
         app: Application,
