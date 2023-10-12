@@ -6,6 +6,8 @@ import os
 from typing import Union, Optional
 from urllib.parse import urlparse
 
+import httpx
+
 class Application:
     def __init__(
             self,
@@ -47,6 +49,8 @@ class Application:
             Filter out AOI PKs below this value.
         """
         self.token = token if token is not None else os.getenv("GRID_ACCESS_TOKEN", "")
+        # need to assign the attribute
+        self._url = ""
         self.url = url
         self.threads = threads
         self.progress = progress
@@ -80,3 +84,17 @@ class Application:
             f"GRid URL {self.url}\n"
             f"Run Method: {self.run_method}\n"
         )
+
+    @property
+    def url(self):
+        return self._url
+    
+    @url.setter
+    def url(self, url):
+        if urlparse(url).path in ["", "/"]:
+            # need to get redirect to actual endpoint:
+            r = httpx.get(url)
+            if r.status_code == 301:
+                # aha-sure enough there is a redirect!
+                url = str(r.next_request.url)
+        self._url = url 
