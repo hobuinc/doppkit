@@ -23,7 +23,7 @@ logger = logging.getLogger("doppkit")
 
 class ExportFileProgress(NamedTuple):
     url: str
-    export_pk: int
+    export_id: int
     current: int = 0
     total: int = 1
     is_complete: bool = False
@@ -43,7 +43,7 @@ class QtProgress(QtCore.QObject):
         # key is AOI PK
         self.aois: dict[int, list[ProgressTracking]] = defaultdict(list)
 
-        self.urls_to_export_pk: dict[str, int] = {}
+        self.urls_to_export_id: dict[str, int] = {}
 
         self.export_files: dict[int, dict[str, ExportFileProgress]] = defaultdict(dict)
 
@@ -65,54 +65,54 @@ class QtProgress(QtCore.QObject):
             None
         """
 
-        export_pk = self.urls_to_export_pk[url]
-        self.export_files[export_pk][url] = ExportFileProgress(
+        export_id = self.urls_to_export_id[url]
+        self.export_files[export_id][url] = ExportFileProgress(
             url,
-            export_pk=export_pk,
+            export_id=export_id,
             total=total
         )
 
     def update(self, name: str, url: str, completed: int) -> None:
-        export_pk = self.urls_to_export_pk[url]
-        old_progress = self.export_files[export_pk][url]
-        self.export_files[export_pk][url] = ExportFileProgress(
+        export_id = self.urls_to_export_id[url]
+        old_progress = self.export_files[export_id][url]
+        self.export_files[export_id][url] = ExportFileProgress(
             url,
-            export_pk=export_pk,
+            export_id=export_id,
             current=completed,
             total=old_progress.total
         )
 
-        export_progress = self.export_progress[export_pk]
+        export_progress = self.export_progress[export_id]
         export_progress.update(
             sum(
                 file_progress.current
                 for file_progress
-                in self.export_files[export_pk].values()
+                in self.export_files[export_id].values()
             )
         )
         self.taskUpdated.emit(export_progress)
 
     def complete_task(self, name: str, url: str) -> None:
-        export_pk = self.urls_to_export_pk[url]
-        old_progress = self.export_files[export_pk][url]
-        self.export_files[export_pk][url] = ExportFileProgress(
+        export_id = self.urls_to_export_id[url]
+        old_progress = self.export_files[export_id][url]
+        self.export_files[export_id][url] = ExportFileProgress(
             url,
-            export_pk,
+            export_id,
             current=old_progress.total,
             total=old_progress.total,
             is_complete=True
         )
 
-        export_progress = self.export_progress[export_pk]
+        export_progress = self.export_progress[export_id]
         export_progress.update(
             sum(
                 file_progress.current
                 for file_progress
-                in self.export_files[export_pk].values()
+                in self.export_files[export_id].values()
             )
         )
 
-        if all(export_file.is_complete for export_file in self.export_files[export_pk].values()):
+        if all(export_file.is_complete for export_file in self.export_files[export_id].values()):
             export_progress.is_complete = True
             self.taskCompleted.emit(export_progress)
 
@@ -160,7 +160,7 @@ class Window(QtWidgets.QMainWindow):
         self.setGeometry(300, 300, 300, 220)
         self.setWindowTitle(f"doppkit - {__version__}")
         self.doppkit = doppkit_application
-        self.AOI_pks: list[int] = []
+        self.AOI_ids: list[int] = []
         self.AOIs: list[AOI] = []  # populated from GRiD
 
         self.progressTracker = QtProgress()
@@ -351,9 +351,9 @@ class Window(QtWidgets.QMainWindow):
     
     def aoisChanged(self) -> None:
         try:
-            self.AOI_pks = [int(aoi) for aoi in self.sender().text().split(",")]
+            self.AOI_ids = [int(aoi) for aoi in self.sender().text().split(",")]
         except (IndexError, ValueError):
-            self.AOI_pks = []
+            self.AOI_ids = []
 
     def tokenChanged(self) -> None:
         self.doppkit.token = self.sender().text().strip()
@@ -382,11 +382,11 @@ class Window(QtWidgets.QMainWindow):
         self.doppkit.disable_ssl_verification = not enable_ssl
 
         api = Grid(self.doppkit)
-        if not self.AOI_pks:
+        if not self.AOI_ids:
             # there is no AOI entered...
             self.buttonList.setEnabled(True)
             return None
-        self.AOIs = await api.get_aois(self.AOI_pks[0])
+        self.AOIs = await api.get_aois(self.AOI_ids[0])
         model = ExportModel()
         model.clear()
 
@@ -424,7 +424,7 @@ class Window(QtWidgets.QMainWindow):
         self.buttonDownload.setEnabled(False)
         await self.listExports()  # get the exports
 
-        if not self.AOI_pks:
+        if not self.AOI_ids:
             # no AOIs entered...
             self.buttonDownload.setEnabled(True)
             return None
@@ -441,7 +441,10 @@ class Window(QtWidgets.QMainWindow):
                 # need to check for export_files, if not present, we need to populate
                 if isinstance(export["exportfiles"], bool):
                     # we need to grab the list of exportfiles...
-                    export["exportfiles"] = await api.get_exports(export["pk"])
+
+                    # v3/v4 GRiD API compatabilty 
+                    key = "id" if "id" in export.keys() else "pk"
+                    export["exportfiles"] = await api.get_exports(export[key])
 
                 # if using the older API, fill in the respective field
                 if "export_total_size" not in export.keys():
@@ -451,6 +454,7 @@ class Window(QtWidgets.QMainWindow):
                     # auxfile total size attribute not at all accessible in v3 of GRiD API
                     export["complete_size"] = export["export_total_size"] + export.get("auxfile_total_size", 0)
                 download_size = 0
+
                 for export_file in export["exportfiles"]:
                     filename = export_file["name"]
                     download_destination = download_dir.joinpath(filename)
@@ -460,26 +464,26 @@ class Window(QtWidgets.QMainWindow):
                         logger.debug(f"File already exists, skipping {filename}")
                     else:
                         urls.append(export_file["url"])
-                        self.progressInterconnect.urls_to_export_pk[export_file["url"]] = export["pk"]
+                        self.progressInterconnect.urls_to_export_id[export_file["url"]] = export[key]
                 progress_tracker = ProgressTracking(
-                    export["pk"],
+                    export[key],
                     export_name=export["name"],
-                    aoi_pk=aoi["pk"],
+                    aoi_id=aoi[key],
                     aoi_name=aoi["name"],
                     current=0,
                     total=export["complete_size"],
                 )
-                self.progressInterconnect.export_progress[export["pk"]] = progress_tracker
-                self.progressInterconnect.aois[aoi["pk"]].append(progress_tracker)
+                self.progressInterconnect.export_progress[export[key]] = progress_tracker
+                self.progressInterconnect.aois[aoi[key]].append(progress_tracker)
 
         _ = await cache(self.doppkit, urls, {}, progress=self.progressInterconnect)
         self.buttonDownload.setEnabled(True)
 
 @dataclass
 class ProgressTracking:
-    export_pk: int
+    export_id: int
     export_name: str
-    aoi_pk: int
+    aoi_id: int
     aoi_name: str
     current: int
     total: int

@@ -50,3 +50,14 @@ build-backend = "setuptools.build_meta"
 [project.scripts]
 doppkit = "doppkit.cli.__main__:cli"
 doppkit-gui = "doppkit.gui.__main__:main"
+
+[tool.mypy]
+python_version = 3.9
+warn_return_any = true
+disallow_untyped_calls = false
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = [
+  "aiofiles"
+]

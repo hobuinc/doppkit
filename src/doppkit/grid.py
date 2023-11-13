@@ -11,9 +11,11 @@ from .cache import cache
 
 logger = logging.getLogger(__name__)
 
-aoi_endpoint_ext = "/api/v3/aois"
-export_endpoint_ext = "/api/v3/exports"
-task_endpoint_ext = "/api/v3/tasks"
+API_VERSION = "v4"
+
+aoi_endpoint_ext = f"/api/{API_VERSION}/aois"
+export_endpoint_ext = f"/api/{API_VERSION}/exports"
+task_endpoint_ext = f"/api/{API_VERSION}/tasks"
 
 
 class ExportStarted(TypedDict):
@@ -107,7 +109,7 @@ class Grid:
         logger.debug(f"Getting export information for aoi_pk={pk} from {self.args.url}")
         url_args = 'intersections=false&intersection_geoms=false'
         if pk:
-            url_args += "&export_full=false&sort=pk"
+            url_args += "&export_full=false"
             aoi_endpoint = f"{self.args.url}{aoi_endpoint_ext}/{pk}?{url_args}"
         else:
             # Grab full dictionary for the export and parse out the download urls
@@ -116,7 +118,6 @@ class Grid:
 
         urls = (aoi_endpoint, )
         headers = {"Authorization": f"Bearer {self.args.token}"}
-
         files = await cache(self.args, urls, headers)
 
         try:
@@ -164,16 +165,19 @@ class Grid:
         else:
             intersect_types = set(intersect_types)
 
-        product_pks = []
+        key = "id" if API_VERSION == "v4" else "pk"
+
+
+        product_ids = []
         for intersection in intersect_types:
             if intersection == "raster":
-                product_pks.extend([entry["pk"] for entry in aoi["raster_intersects"]])
+                product_ids.extend([entry[key] for entry in aoi["raster_intersects"]])
             elif intersection == "mesh":
-                product_pks.extend([entry["pk"] for entry in aoi["mesh_intersects"]])
+                product_ids.extend([entry[key] for entry in aoi["mesh_intersects"]])
             elif intersection == "pointcloud":
-                product_pks.extend([entry["pk"] for entry in aoi["pointcloud_intersects"]])
+                product_ids.extend([entry[key] for entry in aoi["pointcloud_intersects"]])
             elif intersection == "vector":
-                product_pks.extend([entry["pk"] for entry in aoi["vector_intersects"]])
+                product_ids.extend([entry[key] for entry in aoi["vector_intersects"]])
             else:
                 warnings.warn(
                     f"Unknown intersect type {intersection}, needs to be one of "
@@ -185,8 +189,8 @@ class Grid:
         # https://pro.arcgis.com/en/pro-app/2.9/arcpy/classes/spatialreference.htm
         # make sure to provide a way to pass in hsrs and vsrs info from arcgis pro
         params = {
-            "aoi": str(aoi["pk"]),
-            "products": ",".join(map(str, product_pks)),
+            "aoi": str(aoi[key]),
+            "products": ",".join(map(str, product_ids)),
             "name": name,
             'intersections': True,
             'intersection_geoms': False
@@ -218,7 +222,7 @@ class Grid:
         return output
 
 
-    async def get_exports(self, export_pk: int) -> list[Exportfile]:
+    async def get_exports(self, export_id: int) -> list[Exportfile]:
         """
         Parameters
         ----------
@@ -231,10 +235,10 @@ class Grid:
 
 
         """
-        # grid.nga.mil/grid/api/v3/exports/56193?sort=pk&file_geoms=false
+        # grid.nga.mil/grid/api/v3/exports/56193?file_geoms=false
         export_endpoint = (
             f"{self.args.url}{export_endpoint_ext}/"
-            f"{export_pk}?sort=pk&file_geoms=false"
+            f"{export_id}?file_geoms=false"
         )
         headers = {"Authorization": f"Bearer {self.args.token}"}
         urls = [export_endpoint]
@@ -250,6 +254,10 @@ class Grid:
             if isinstance(export_files[0], Exception):
                 logger.error(f"Doppkit Cache Function Returned the following exception: {export_files[0]}")
                 raise export_files[0] from e
+            elif isinstance(export_files[0], httpx.Response):            
+                await response.aread()
+                logger.error(f"GRiD returned an error code {response.status_code} with message: {response.text}")
+                raise httpx.RequestError from e
             else:
                 logger.error(f"Doppkit cache function returned unexpected type: {type(export_files[0])}")
                 raise TypeError(
