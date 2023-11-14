@@ -20,7 +20,7 @@ async def start_gui(app: 'Application'):
     loop = asyncio.get_event_loop()
     future = loop.create_future()
 
-    qApp = QtWidgets.QApplication.instance()
+    qApp: QtWidgets.QApplication = QtWidgets.QApplication.instance()
     qApp.setApplicationName("doppkit")
     qApp.setOrganizationName("Hobu")
     qApp.setStyle("fusion")

@@ -14,42 +14,40 @@ def listAOIs(args):
     console = Console()
     table = Table(title='AOIs')
 
-    table.add_column("AOI PK", justify="right")
-    # table.add_column("Export PK", justify="right")
+    table.add_column("AOI ID", justify="right")
     table.add_column("Name")
-    # table.add_column("Export")
     for aoi in aois:
-        pk = str(aoi['pk'])
+        id_ = str(aoi['id'])
         name = str(aoi['name'])
-        table.add_row(pk, name)
+        table.add_row(id_, name)
 
     console.print(table)
 
 
-def listExports(args, pk):
-    """List Exports for a given AOI PK"""
+def listExports(args, id_):
+    """List Exports for a given AOI ID"""
 
     api = Grid(args)
 
-    aois = asyncio.run(api.get_aois(pk=pk))
+    aois = asyncio.run(api.get_aois(id_=id_))
 
     aoi = aois[0]
     console = Console()
-    table = Table(title=f"Exports for {aoi['name']} – {pk}")
+    table = Table(title=f"Exports for {aoi['name']} – {id_}")
 
-    table.add_column("Export PK")
-    table.add_column("Item PK")
+    table.add_column("Export ID")
+    table.add_column("Item ID")
     table.add_column("Name")
     table.add_column("Type")
     table.add_column("Size")
     if aoi.get('exports'):
         for export in aoi['exports']:
-            export_pk = export['pk']
-            exports =  asyncio.run(api.get_exports(export_pk))
+            export_id = export['id']
+            exports =  asyncio.run(api.get_exports(export_id))
             for e in exports:
                 table.add_row(
-                    str(export_pk),
-                    str(e['pk']),
+                    str(export_id),
+                    str(e['id']),
                     e['name'],
                     e['datatype'],
                     str(e['filesize'])

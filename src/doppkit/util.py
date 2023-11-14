@@ -106,8 +106,8 @@ def parse_options_header(value: Optional[str]) -> tuple[str, dict[str, str]]:
 
     rest = f";{rest}"
     options: dict[str, str] = {}
-    encoding: str | None = None
-    continued_encoding: str | None = None
+    encoding: Optional[str] = None
+    continued_encoding: Optional[str] = None
 
     for pk, pv in _parameter_re.findall(rest):
         if not pk:

@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-async def sync(args: 'Application', pk: str) -> list[Content]:
+async def sync(args: 'Application', id_: str) -> list[Content]:
     """The main function for our script."""
 
     # Create a directory into which our downloads will go
@@ -21,7 +21,9 @@ async def sync(args: 'Application', pk: str) -> list[Content]:
     download_dir.mkdir(exist_ok=True)
 
     api = Grid(args)
-    aois = await api.get_aois(int(pk))
+    aois = await api.get_aois(int(id_))
+    # v3/v4 GRiD API compatabilty 
+    key = "id" if "id" in aois[0].keys() else "pk"
     if args.filter:
         logger.debug(f'Filtering AOIs with "{args.filter}"')
         aois = [aoi for aoi in aois if args.filter in aoi["notes"]]
@@ -29,16 +31,16 @@ async def sync(args: 'Application', pk: str) -> list[Content]:
     for aoi in aois:
         for export in aoi["exports"]:
             logger.debug(f"export: {export}")
-            files = await api.get_exports(export['pk'])
+            files = await api.get_exports(export[key])
             exportfiles.extend(files)
     total_downloads = len(exportfiles)
     count = 0
     urls = []
     logger.debug(f"{total_downloads} files found, downloading to dir: {download_dir}")
-    for exportfile in sorted(exportfiles, key=lambda x: int(x.get("pk"))):
-        pk = exportfile.get("pk")
-        if pk < int(args.start_id):
-            logger.info(f"Skipping file {pk}")
+    for exportfile in sorted(exportfiles, key=lambda x: int(x.get(key))):
+        id_ = exportfile.get(key)
+        if id_ < int(args.start_id):
+            logger.info(f"Skipping file {id_}")
             total_downloads -= 1
             logger.info(f"{count} of {total_downloads} downloads complete")
             continue
@@ -46,7 +48,7 @@ async def sync(args: 'Application', pk: str) -> list[Content]:
         download_url = exportfile["url"]
         download_destination = download_dir.joinpath(filename)
         logger.debug(
-            f"Exportfile PK {pk} downloading from {download_url} to {download_destination}"
+            f"Exportfile ID {id_} downloading from {download_url} to {download_destination}"
         )
 
         # Skip this file if we've already downloaded it
