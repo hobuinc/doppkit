@@ -16,13 +16,15 @@ import importlib.util
 import sys
 import pathlib
 spec = importlib.util.spec_from_file_location(
-	"doppkit",
-	pathlib.Path("../../src/doppkit/__init__.py").resolve()
+	"doppkit_version",
+	(
+        pathlib.Path(__file__).parent / ".." / ".." / "src" / "doppkit" / "__version__.py"
+	).resolve()
 )
-doppkit = importlib.util.module_from_spec(spec)
-sys.modules["doppkit"] = doppkit
-spec.loader.exec_module(doppkit)
-release = doppkit.__version__
+doppkit_version = importlib.util.module_from_spec(spec)
+sys.modules["doppkit"] = doppkit_version
+spec.loader.exec_module(doppkit_version)
+release = doppkit_version.__version__
 
 from packaging.version import parse
 version = parse(release).public

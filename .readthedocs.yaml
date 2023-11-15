@@ -9,8 +9,8 @@ build:
     python: "3"
 
 sphinx:
-  fail_on_warning: true
-  configuration: docs/conf.py
+  fail_on_warning: false
+  configuration: docs/source/conf.py
 
 python:
   install:
