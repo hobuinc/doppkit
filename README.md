@@ -1,7 +1,5 @@
 # Doppkit for GRiD
 
-![PyPI - Version](https://img.shields.io/pypi/v/doppkit)
-
 Doppkit is a tool for interacting with the [USACE GRiD service](https://grid.nga.mil). The primary usage is for downloading the exports for a specific AOI by providing an access token and AOI PK.  Doppkit is designed so it can be functional on computers that may not have a reliable network connection.
 
 For convenience, single-file code-signed binaries for Windows are provided on the [releases page](https://github.com/hobuinc/doppkit/releases).
@@ -15,14 +13,15 @@ The text UI to show download progress and log-information is created using the r
 From source:
 
 ```bash
-pip install doppkit
-doppkit --help
+$ pip install doppkit
+...
+$ doppkit --help
 ```
 
 From built executable:
 
 ```doscon
-doppkit-cli.exe --help
+> doppkit-cli.exe --help
 ```
 
 ### GUI
@@ -31,15 +30,16 @@ The doppkit GUI which uses the PySide6 bindings of the Qt framework.
 
 From source:
 
-```doscon
-pip install "doppkit[GUI]"
-doppkit-gui 
+```bash
+$ pip install "doppkit[GUI]"
+...
+$ doppkit-gui 
 ```
 
 Using generated binary:
 
 ```doscon
-doppkit.exe
+> doppkit.exe
 ```
 
 ## Providing the Token
