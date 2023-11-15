@@ -11,20 +11,25 @@ copyright = '2023, Hobu Inc.'
 author = 'Ognyan Moore'
 
 # The full version, including alpha/beta/rc tags
-# get version info without installing
-import importlib.util
-import sys
 import pathlib
-spec = importlib.util.spec_from_file_location(
-	"doppkit_version",
-	(
-        pathlib.Path(__file__).parent / ".." / ".." / "src" / "doppkit" / "__version__.py"
-	).resolve()
-)
-doppkit_version = importlib.util.module_from_spec(spec)
-sys.modules["doppkit"] = doppkit_version
-spec.loader.exec_module(doppkit_version)
-release = doppkit_version.__version__
+import ast
+
+# get version info without installing first
+file_path = (
+         pathlib.Path(__file__).parent / ".." / ".." / "src" / "doppkit" / "__init__.py"
+).resolve()
+node = ast.parse(file_path.read_text())
+for subnode in node.body:
+    if isinstance(subnode, ast.Assign) and subnode.targets[0].id == "__version__":
+        release = subnode.value.value
+        break
+else: # if unable to determine, check to see if it is installed...
+    try:
+        import doppkit
+    except ImportError as e:
+        raise ImportError("Unable to determine doppkit version information") from e
+    else:
+        release = doppkit.__version__
 
 from packaging.version import parse
 version = parse(release).public
@@ -50,8 +55,8 @@ html_static_path = ['_static']
 # -- Options for LATEX output ------------------------------------------------
 
 latex_elements = {
-	'extraclassoptions': ',oneany,oneside',
-	'papersize': 'letterpaper',
+    'extraclassoptions': ',oneany,oneside',
+    'papersize': 'letterpaper',
 }
 
 pygments_style = "staroffice"
