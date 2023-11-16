@@ -90,11 +90,11 @@ def listAOIs(app, filter):
 
 
 @cli.command('list-exports')
-@click.argument("pk",  nargs=1)
+@click.argument("id",  nargs=1)
 @click.pass_obj
-def listExports(app, pk):
+def listExports(app, id_):
     from doppkit.cli.list import listExports as listExportsFunction
-    listExportsFunction(app, pk)
+    listExportsFunction(app, id_)
 
 if __name__ == "__main__":
     cli()
