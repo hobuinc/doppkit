@@ -66,14 +66,14 @@ jobs:
         run: pyinstaller gui.spec
       - name: 'Upload Windows GUI Artifact'
         if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: 'doppkit-gui'
           path: |
             dist/doppkit.exe
       - name: 'Upload Windows CLI Artifact'
         if: runner.os == 'Windows'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: 'doppkit-cli'
           path: |
