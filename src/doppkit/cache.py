@@ -1,22 +1,28 @@
-__all__ = ["Content", "Progress", "cache", "cache_url"]
+__all__ = ["Content", "Progress", "cache", "cache_url", "DownloadUrl"]
 
 import aiofiles
 import contextlib
 import pathlib
 import logging
 import asyncio
-
 import httpx
 from io import BytesIO
 from .util import parse_options_header
 from . import __version__
 
-from typing import Protocol, Optional, TYPE_CHECKING, Union, Iterable
+from typing import Protocol, Optional, NamedTuple, TYPE_CHECKING, Union, Iterable
 
 if TYPE_CHECKING:
     from .app import Application
 
 logger = logging.getLogger(__name__)
+
+
+class DownloadUrl(NamedTuple):
+    url: str
+    storage_path: str = "."
+    total: int = 1
+
 
 class Progress(Protocol):
 
@@ -29,12 +35,13 @@ class Progress(Protocol):
     def complete_task(self, name: str, url: str) -> None:
         ...
 
+
 class Content:
     def __init__(
         self,
         headers,
         filename: Optional[pathlib.Path] = None,
-        args: 'Optional[Application]'=None
+        args: 'Optional[Application]' = None
     ):
         self.directory = None
         self.headers = headers
@@ -56,7 +63,6 @@ class Content:
         filename = None
         if "content-disposition" in [key.lower() for key in headers.keys()]:
             disposition = headers["Content-Disposition"]
-            logger.debug(f"content-disposition: '{disposition}'")
             if "attachment" in disposition.lower():
                 # grab Aioysius_PC_20200121.zip from 'attachment; filename="Aioysius_PC_20200121.zip"'
                 attachment = parse_options_header(headers["Content-Disposition"])
@@ -71,25 +77,23 @@ class Content:
     def __str__(self):
         return self.__repr__()
 
-    def get_data(self):
+    def get_data(self) -> bytes:
         if isinstance(self.target, BytesIO):
             self.target.flush()
             self.target.seek(0)
             return self.target.read()
-
         else:
             raise NotImplementedError("data intended to be used with BytesIO objects")
 
     data = property(get_data)
 
 
-
 async def cache(
         app: 'Application',
-        urls: Iterable[str],
+        urls: Iterable[DownloadUrl],
         headers: dict[str, str],
         progress: Optional[Progress]=None
-) -> list[Union[Content, Exception, httpx.Response]]:
+) -> Iterable[Union[Content, Exception, httpx.Response]]:
     limits = httpx.Limits(
         max_keepalive_connections=app.threads, max_connections=app.threads
     )
@@ -114,22 +118,21 @@ async def cache(
             ],
             return_exceptions=True
         )
+    logger.debug("Cache operation complete.")
     return files
 
 
 async def cache_url(
         args: 'Application',
-        url: str,
+        url: DownloadUrl,
         headers: dict[str, str],
         client: httpx.AsyncClient,
         progress: Optional[Progress] = None
 ) -> Union[Content, httpx.Response]:
     limit = args.limit
-    logger.debug(f"Starting to cache {url}")
     async with limit:
-        request = client.build_request("GET", url, headers=headers, timeout=None)
+        request = client.build_request("GET", url.url, headers=headers, timeout=None)
         response = await client.send(request, stream=True)
-        
         if response.is_error:
             await response.aread()
             logger.error(f"GRiD returned an error code {response.status_code} with message: {response.text}")
@@ -146,24 +149,30 @@ async def cache_url(
             await response.aclose()
             response = await client.send(request, stream=True)
             total = max(total, int(response.headers.get("Content-length", 0)))
-        c = Content(response.headers, filename=filename, args=args)
+        if filename is not None:
+            filename = pathlib.Path(url.storage_path.lstrip("/") / filename)
+        c = Content(
+            response.headers,
+            filename=filename,
+            args=args
+        )
         if args.progress and progress is not None:
             name = c.target.name if isinstance(c.target, pathlib.Path) else "bytesIO"
-            progress.create_task(f"{name}", url, total=total)
+            progress.create_task(f"{name}", url.url, total=total)
         chunk_count = 0
         if isinstance(c.target, BytesIO):
             # do in-memory stuff
             async for chunk in response.aiter_bytes():
                 _ = c.target.write(chunk)
                 chunk_count += 1
-
                 if args.progress and progress is not None:
                     progress.update(
-                        name, url, completed=response.num_bytes_downloaded
+                        name, url.url, completed=response.num_bytes_downloaded
                     )
             c.target.flush()
             c.target.seek(0)
-        else:  # isinstance(c.target, pathlib.Path)
+        else:
+            # isinstance(c.target, pathlib.Path)
             # create parent directory/directories if needed
             if c.target.parent is not None:
                 c.target.parent.mkdir(parents=True, exist_ok=True)
@@ -174,11 +183,11 @@ async def cache_url(
                     chunk_count += 1
                     if args.progress and progress is not None:
                         progress.update(
-                            name, url, completed=response.num_bytes_downloaded
+                            name, url.url, completed=response.num_bytes_downloaded
                         )
         if args.progress and progress is not None:
             # we can hide the task now that it's finished
-            progress.complete_task(name, url)
+            progress.complete_task(name, url.url)
         await response.aclose()
         if limit.locked():
             await asyncio.sleep(0.5)

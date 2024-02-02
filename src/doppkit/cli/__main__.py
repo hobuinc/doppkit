@@ -68,7 +68,7 @@ def cli(ctx, token, url, log_level, threads, progress, disable_ssl_verification)
 @click.option("--directory", help="Output directory to write", default="downloads", type=pathlib.Path)
 @click.option("--filter", help="AOI note filter query", default="")
 @click.argument("id",)
-def sync(app, timeout, start_id, override, directory, filter, id_):
+def sync(app, timeout, start_id, override, directory, filter, id):
     from doppkit.cli.sync import sync as syncFunction
     app.start_id = start_id
     app.timeout = timeout
@@ -76,8 +76,8 @@ def sync(app, timeout, start_id, override, directory, filter, id_):
     app.override = override
     app.directory = directory
     app.filter = filter
-    app.id = id_
-    asyncio.run(syncFunction(app, id_))
+    app.id = id
+    asyncio.run(syncFunction(app, id))
 
 
 @cli.command('list-aois')
@@ -92,9 +92,9 @@ def listAOIs(app, filter):
 @cli.command('list-exports')
 @click.argument("id",  nargs=1)
 @click.pass_obj
-def listExports(app, id_):
+def listExports(app, id):
     from doppkit.cli.list import listExports as listExportsFunction
-    listExportsFunction(app, id_)
+    listExportsFunction(app, id)
 
 if __name__ == "__main__":
     cli()

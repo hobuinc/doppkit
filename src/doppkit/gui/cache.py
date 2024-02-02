@@ -3,6 +3,7 @@ import logging
 
 from ..app import Application
 from ..cache import Content
+from ..cache import DownloadUrl
 from ..cache import cache as cache_generic
 
 if TYPE_CHECKING:
@@ -10,12 +11,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
 async def cache(
         app: Application,
-        urls: Iterable[str],
+        urls: Iterable[DownloadUrl],
         headers: dict[str, str],
         progress: 'QtProgress'
-) -> list[Union[Content, Exception]]:
+) -> Iterable[Union[Content, Exception]]:
     """
     Downloads URL contents from GRiD
 
@@ -23,7 +25,7 @@ async def cache(
     ----------
     app
     urls
-        List of URLs to download the contents of
+        List of DownloadUrl Named Tuples to download the contents of
     headers
         Header information to relay to the GRiD Server
     progress

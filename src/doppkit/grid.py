@@ -7,7 +7,7 @@ import logging
 import httpx
 from typing import Optional, Iterable, TypedDict, Union
 
-from .cache import cache
+from .cache import cache, DownloadUrl
 
 logger = logging.getLogger(__name__)
 
@@ -24,26 +24,39 @@ class ExportStarted(TypedDict):
 
 
 class Exportfile(TypedDict):
-    pk: int
+    id: int
     name: str
     datatype: str
     filesize: int
+    url: str
+    storage_path: str  # isn't present in GRiD v1.7 but will be in following version
     aoi_coverage: float
     geom: str
+
+
+class Auxfile(TypedDict):
+    id: int
+    filesize: int
+    datatype: str
+    name: str
     url: str
+    strage_path: str
 
 
 class VectorProduct(TypedDict):
-    pk: int
+    id: int
+
 
 class RasterProduct(TypedDict):
-    pk: int
+    id: int
+
 
 class PointcloudProduct(TypedDict):
-    pk: int
+    id: int
+
 
 class MeshProduct(TypedDict):
-    pk: int
+    id: int
 
 
 class Task(TypedDict):
@@ -69,7 +82,7 @@ class Export(TypedDict):
     license_url: str
     notes: str
     percent_complete: str
-    pk: int
+    id: int
     send_email: bool
     started_at: str
     status: str
@@ -84,7 +97,7 @@ Export.__optional_keys__ = frozenset({'export_total_size', 'auxfile_total_size',
 
 
 class AOI(TypedDict):
-    pk: int
+    id: int
     area: Optional[float]
     name: str
     notes: str
@@ -105,26 +118,27 @@ class Grid:
         logging.getLogger("httpx").setLevel(logging.WARNING)
         logger.setLevel(self.args.log_level)
 
-    async def get_aois(self, pk: Optional[int]=None) -> list[AOI]:
-        logger.debug(f"Getting export information for aoi_pk={pk} from {self.args.url}")
+    async def get_aois(self, id: Optional[int]=None) -> list[AOI]:
+        logger.debug(f"Getting export information for aoi_pk={id} from {self.args.url}")
         url_args = 'intersections=false&intersection_geoms=false'
-        if pk:
+        if id:
             url_args += "&export_full=false"
-            aoi_endpoint = f"{self.args.url}{aoi_endpoint_ext}/{pk}?{url_args}"
+            aoi_endpoint = f"{self.args.url}{aoi_endpoint_ext}/{id}?{url_args}"
         else:
             # Grab full dictionary for the export and parse out the download urls
             url_args += "&export_full=true"
             aoi_endpoint = f"{self.args.url}{aoi_endpoint_ext}?{url_args}"
 
-        urls = (aoi_endpoint, )
+        # urls = (aoi_endpoint, )
+        urls = [DownloadUrl(aoi_endpoint)]
         headers = {"Authorization": f"Bearer {self.args.token}"}
         files = await cache(self.args, urls, headers)
-
+        files = list(files)
         try:
             response = json.load(files[0].target)
         except IndexError as e:
-            logger.error(f"GRiD returned no products for AOI {pk}")
-            raise RuntimeError(f"GRiD returned no products for AOI {pk}") from e
+            logger.error(f"GRiD returned no products for AOI {id}")
+            raise RuntimeError(f"GRiD returned no products for AOI {id}") from e
         except AttributeError as e:
             if isinstance(files[0], Exception):
                 logger.error(f"Doppkit cache function returned the following exception: {files[0]}")
@@ -165,19 +179,16 @@ class Grid:
         else:
             intersect_types = set(intersect_types)
 
-        key = "id" if API_VERSION == "v4" else "pk"
-
-
         product_ids = []
         for intersection in intersect_types:
             if intersection == "raster":
-                product_ids.extend([entry[key] for entry in aoi["raster_intersects"]])
+                product_ids.extend([entry["id"] for entry in aoi["raster_intersects"]])
             elif intersection == "mesh":
-                product_ids.extend([entry[key] for entry in aoi["mesh_intersects"]])
+                product_ids.extend([entry["id"] for entry in aoi["mesh_intersects"]])
             elif intersection == "pointcloud":
-                product_ids.extend([entry[key] for entry in aoi["pointcloud_intersects"]])
+                product_ids.extend([entry["id"] for entry in aoi["pointcloud_intersects"]])
             elif intersection == "vector":
-                product_ids.extend([entry[key] for entry in aoi["vector_intersects"]])
+                product_ids.extend([entry["id"] for entry in aoi["vector_intersects"]])
             else:
                 warnings.warn(
                     f"Unknown intersect type {intersection}, needs to be one of "
@@ -189,7 +200,7 @@ class Grid:
         # https://pro.arcgis.com/en/pro-app/2.9/arcpy/classes/spatialreference.htm
         # make sure to provide a way to pass in hsrs and vsrs info from arcgis pro
         params = {
-            "aoi": str(aoi[key]),
+            "aoi": str(aoi["id"]),
             "products": ",".join(map(str, product_ids)),
             "name": name,
             'intersections': True,
@@ -222,11 +233,11 @@ class Grid:
         return output
 
 
-    async def get_exports(self, export_id: int) -> list[Exportfile]:
+    async def get_exports(self, export_id: int) -> list[Union[Exportfile, Auxfile]]:
         """
         Parameters
         ----------
-        export_pk
+        export_id
             Export PK to get a list of Exportfiles for
 
         Returns
@@ -241,13 +252,14 @@ class Grid:
             f"{export_id}?file_geoms=false"
         )
         headers = {"Authorization": f"Bearer {self.args.token}"}
-        urls = [export_endpoint]
+        urls = [DownloadUrl(export_endpoint)]
         export_files = await cache(self.args, urls, headers)
+        export_files = list(export_files)
         try:
             response = json.load(export_files[0].target)
         except IndexError:
-            logger.warn(
-                f"Export: {export_pk} returned no export files to download"
+            logger.warning(
+                f"Export: {export_id} returned no export files to download"
             )
             return []
         except AttributeError as e:
@@ -255,8 +267,8 @@ class Grid:
                 logger.error(f"Doppkit Cache Function Returned the following exception: {export_files[0]}")
                 raise export_files[0] from e
             elif isinstance(export_files[0], httpx.Response):            
-                await response.aread()
-                logger.error(f"GRiD returned an error code {response.status_code} with message: {response.text}")
+                await export_files[0].aread()
+                logger.error(f"GRiD returned an error code {export_files[0].status_code} with message: {export_files[0].text}")
                 raise httpx.RequestError from e
             else:
                 logger.error(f"Doppkit cache function returned unexpected type: {type(export_files[0])}")
@@ -265,8 +277,8 @@ class Grid:
                 ) from e
         else:
             if "error" in response:
-                logger.warn(
-                    f"Attempting to access {export_pk=} resulted in the following error "
+                logger.warning(
+                    f"Attempting to access {export_id=} resulted in the following error "
                     f"from GRiD: {response['error']}"
                 )
                 return []
@@ -276,9 +288,11 @@ class Grid:
             j = json.loads(f.data)
             exports.append(j)
 
-        export_files = []
+        files = []
         for e in exports:
             ex = e['exports']
             for item in ex:
-                export_files.extend(iter(item['exportfiles']))
-        return export_files
+                # need to construct "storage_path" attribute in exportfiles
+                files.extend(iter(item['exportfiles']))
+                files.extend(iter(item['auxfiles']))
+        return files

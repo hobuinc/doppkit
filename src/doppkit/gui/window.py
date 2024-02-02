@@ -1,7 +1,7 @@
 import os
 from .. import __version__
 from ..grid import Grid, AOI
-from .cache import cache
+from .cache import cache, DownloadUrl
 from qtpy import QtCore, QtGui, QtWidgets
 from typing import Optional, NamedTuple
 from collections import defaultdict
@@ -21,12 +21,15 @@ from .MenuBar import MenuBar
 
 logger = logging.getLogger("doppkit")
 
+
 class ExportFileProgress(NamedTuple):
     url: str
     export_id: int
     current: int = 0
     total: int = 1
     is_complete: bool = False
+
+
 
 
 class QtProgress(QtCore.QObject):
@@ -441,20 +444,11 @@ class Window(QtWidgets.QMainWindow):
                 # need to check for export_files, if not present, we need to populate
                 if isinstance(export["exportfiles"], bool):
                     # we need to grab the list of exportfiles...
+                    export["exportfiles"] = await api.get_exports(export["id"])
+                elif 'auxfiles' in export.keys():
+                    export["exportfiles"].extend(export["auxfiles"])
 
-                    # v3/v4 GRiD API compatabilty 
-                    key = "id" if "id" in export.keys() else "pk"
-                    export["exportfiles"] = await api.get_exports(export[key])
-
-                # if using the older API, fill in the respective field
-                if "export_total_size" not in export.keys():
-                    export["export_total_size"] = sum(export_file["filesize"] for export_file in export["exportfiles"])
-
-                if "complete_size" not in export.keys():
-                    # auxfile total size attribute not at all accessible in v3 of GRiD API
-                    export["complete_size"] = export["export_total_size"] + export.get("auxfile_total_size", 0)
                 download_size = 0
-
                 for export_file in export["exportfiles"]:
                     filename = export_file["name"]
                     download_destination = download_dir.joinpath(filename)
@@ -463,18 +457,18 @@ class Window(QtWidgets.QMainWindow):
                     if not self.doppkit.override and download_destination.exists():
                         logger.debug(f"File already exists, skipping {filename}")
                     else:
-                        urls.append(export_file["url"])
-                        self.progressInterconnect.urls_to_export_id[export_file["url"]] = export[key]
+                        urls.append(DownloadUrl(export_file["url"], export_file.get("storage_path", "."), export_file["filesize"]))
+                        self.progressInterconnect.urls_to_export_id[export_file["url"]] = export["id"]
                 progress_tracker = ProgressTracking(
-                    export[key],
+                    export["id"],
                     export_name=export["name"],
-                    aoi_id=aoi[key],
+                    aoi_id=aoi["id"],
                     aoi_name=aoi["name"],
                     current=0,
                     total=export["complete_size"],
                 )
-                self.progressInterconnect.export_progress[export[key]] = progress_tracker
-                self.progressInterconnect.aois[aoi[key]].append(progress_tracker)
+                self.progressInterconnect.export_progress[export["id"]] = progress_tracker
+                self.progressInterconnect.aois[aoi["id"]].append(progress_tracker)
 
         _ = await cache(self.doppkit, urls, {}, progress=self.progressInterconnect)
         self.buttonDownload.setEnabled(True)
@@ -494,7 +488,10 @@ class ProgressTracking:
     display_rate: str = "0.0 B/s"
 
     def ratio(self) -> float:
-        return self.current / self.total
+        ratio = self.current / self.total
+        if ratio >= 1.0:
+            logger.warning("Completed download ratio calculated to be > 1.0, likely incorrect...")
+        return min([ratio, 1.0])
 
     def percentage(self) -> int:
         return math.floor(100 * self.ratio())

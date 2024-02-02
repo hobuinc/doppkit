@@ -13,10 +13,10 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
         super().__init__(parent)
 
     def paint(
-            self,
-            painter: QtGui.QPainter,
-            option: QtWidgets.QStyleOptionViewItem,
-            index: QtCore.QModelIndex
+        self,
+        painter: QtGui.QPainter,
+        option: QtWidgets.QStyleOptionViewItem,
+        index: QtCore.QModelIndex
     ) -> None:
 
         item: Union['AOIItem', 'ExportItem'] = index.internalPointer()
