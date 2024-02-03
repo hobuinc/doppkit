@@ -13,21 +13,17 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
         super().__init__(parent)
 
     def paint(
-            self,
-            painter: QtGui.QPainter,
-            option: QtWidgets.QStyleOptionViewItem,
-            index: QtCore.QModelIndex
+        self,
+        painter: QtGui.QPainter,
+        option: QtWidgets.QStyleOptionViewItem,
+        index: QtCore.QModelIndex
     ) -> None:
 
         item: Union['AOIItem', 'ExportItem'] = index.internalPointer()
         if isinstance(item, AOIItem):
             return super().paint(painter, option, index)
-
-        # v3/v4 GRiD API compatabilty 
-        key = "id" if "id" in item.export.keys() else "pk"
-
         try:
-            progress = item.progressInterconnect.export_progress[item.export[key]]
+            progress = item.progressInterconnect.export_progress[item.export["id"]]
         except KeyError:
             # when we're not actually tracking download progress...
             completed = -1  # minimum - 1 indicates progress hasn't started
@@ -36,7 +32,7 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
         else:
             completed = progress.int32_progress()
             text = progress.export_name
-            speed = progress.display_rate
+            # speed = progress.display_rate
 
         progressBarOption = QtWidgets.QStyleOptionProgressBar()
         progressBarOption.state = option.state | QtWidgets.QStyle.StateFlag.State_Horizontal
@@ -49,15 +45,16 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
 
         fontMetrics = QtGui.QFontMetrics(option.font)
 
-        speed_report_rect = fontMetrics.boundingRect(
-            option.rect,
-            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.TextFlag.TextSingleLine,
-            speed
-        )
+        # speed_report_rect = fontMetrics.boundingRect(
+        #     option.rect,
+        #     QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.TextFlag.TextSingleLine,
+        #     speed
+        # )
         item_name = fontMetrics.elidedText(
             text,
             QtCore.Qt.TextElideMode.ElideMiddle,
-            option.rect.width() - speed_report_rect.width()
+            option.rect.width()
+            # option.rect.width() - speed_report_rect.width()
         )
         text_name_rect = fontMetrics.boundingRect(
             option.rect,
@@ -77,11 +74,11 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.TextFlag.TextSingleLine,
             item_name
         )
-        painter.drawText(
-            speed_report_rect,
-            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.TextFlag.TextSingleLine,
-            speed
-        )
+        # painter.drawText(
+        #     speed_report_rect,
+        #     QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.TextFlag.TextSingleLine,
+        #     speed
+        # )
         painter.restore()
         return None
 

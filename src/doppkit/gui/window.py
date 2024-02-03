@@ -1,7 +1,7 @@
 import os
 from .. import __version__
 from ..grid import Grid, AOI
-from .cache import cache
+from .cache import cache, DownloadUrl
 from qtpy import QtCore, QtGui, QtWidgets
 from typing import Optional, NamedTuple
 from collections import defaultdict
@@ -20,6 +20,7 @@ from .LogWidget import LoggingDialog
 from .MenuBar import MenuBar
 
 logger = logging.getLogger("doppkit")
+
 
 class ExportFileProgress(NamedTuple):
     url: str
@@ -79,39 +80,24 @@ class QtProgress(QtCore.QObject):
             url,
             export_id=export_id,
             current=completed,
-            total=old_progress.total
+            total=old_progress.total,
+            is_complete=completed >= old_progress.total
         )
 
         export_progress = self.export_progress[export_id]
-        export_progress.update(
-            sum(
-                file_progress.current
-                for file_progress
-                in self.export_files[export_id].values()
-            )
-        )
+
+        export_downloaded = sum(file_progress.current for file_progress in self.export_files[export_id].values())
+        logger.debug(f"{export_downloaded=}")
+        export_progress.update(export_downloaded)
         self.taskUpdated.emit(export_progress)
 
     def complete_task(self, name: str, url: str) -> None:
         export_id = self.urls_to_export_id[url]
         old_progress = self.export_files[export_id][url]
-        self.export_files[export_id][url] = ExportFileProgress(
-            url,
-            export_id,
-            current=old_progress.total,
-            total=old_progress.total,
-            is_complete=True
-        )
+
+        self.update(name, url, old_progress.total)
 
         export_progress = self.export_progress[export_id]
-        export_progress.update(
-            sum(
-                file_progress.current
-                for file_progress
-                in self.export_files[export_id].values()
-            )
-        )
-
         if all(export_file.is_complete for export_file in self.export_files[export_id].values()):
             export_progress.is_complete = True
             self.taskCompleted.emit(export_progress)
@@ -123,7 +109,6 @@ class QtProgress(QtCore.QObject):
         pass
 
 
-
 class DirectoryValidator(QtGui.QValidator):
 
     def validate(self, input_: str, pos: int) -> tuple[QtGui.QValidator.State, str, int]:
@@ -132,7 +117,8 @@ class DirectoryValidator(QtGui.QValidator):
         else:
             state = QtGui.QValidator.State.Intermediate
         return state, input_, pos
-    
+
+
 class URLValidator(QtGui.QValidator):
 
     def validate(self, input_: str, pos: int) -> tuple[QtGui.QValidator.State, str, int]:
@@ -155,7 +141,6 @@ class Window(QtWidgets.QMainWindow):
 
     def __init__(self, doppkit_application, *args):
         super().__init__(*args)
-
 
         self.setGeometry(300, 300, 300, 220)
         self.setWindowTitle(f"doppkit - {__version__}")
@@ -313,7 +298,6 @@ class Window(QtWidgets.QMainWindow):
 
         self.progressInterconnect = QtProgress()
         self.show()
-    
 
     def closeEvent(self, evt: QtGui.QCloseEvent) -> None:
         settings = QtCore.QSettings()
@@ -441,40 +425,38 @@ class Window(QtWidgets.QMainWindow):
                 # need to check for export_files, if not present, we need to populate
                 if isinstance(export["exportfiles"], bool):
                     # we need to grab the list of exportfiles...
+                    export["exportfiles"] = await api.get_exports(export["id"])
+                elif 'auxfiles' in export.keys():
+                    export["exportfiles"].extend(export["auxfiles"])
 
-                    # v3/v4 GRiD API compatabilty 
-                    key = "id" if "id" in export.keys() else "pk"
-                    export["exportfiles"] = await api.get_exports(export[key])
-
-                # if using the older API, fill in the respective field
-                if "export_total_size" not in export.keys():
-                    export["export_total_size"] = sum(export_file["filesize"] for export_file in export["exportfiles"])
-
-                if "complete_size" not in export.keys():
-                    # auxfile total size attribute not at all accessible in v3 of GRiD API
-                    export["complete_size"] = export["export_total_size"] + export.get("auxfile_total_size", 0)
                 download_size = 0
-
                 for export_file in export["exportfiles"]:
                     filename = export_file["name"]
                     download_destination = download_dir.joinpath(filename)
-                    download_size += export_file["filesize"]
+
                     # TODO: compare filesizes, not just if it exists
                     if not self.doppkit.override and download_destination.exists():
                         logger.debug(f"File already exists, skipping {filename}")
                     else:
-                        urls.append(export_file["url"])
-                        self.progressInterconnect.urls_to_export_id[export_file["url"]] = export[key]
+                        urls.append(
+                            DownloadUrl(
+                                export_file["url"],
+                                export_file.get("storage_path", "."),
+                                export_file["filesize"]
+                            )
+                        )
+                        download_size += export_file["filesize"]
+                        self.progressInterconnect.urls_to_export_id[export_file["url"]] = export["id"]
                 progress_tracker = ProgressTracking(
-                    export[key],
+                    export["id"],
                     export_name=export["name"],
-                    aoi_id=aoi[key],
+                    aoi_id=aoi["id"],
                     aoi_name=aoi["name"],
                     current=0,
-                    total=export["complete_size"],
+                    total=download_size   # export["complete_size"] is inaccurate for the time being...
                 )
-                self.progressInterconnect.export_progress[export[key]] = progress_tracker
-                self.progressInterconnect.aois[aoi[key]].append(progress_tracker)
+                self.progressInterconnect.export_progress[export["id"]] = progress_tracker
+                self.progressInterconnect.aois[aoi["id"]].append(progress_tracker)
 
         _ = await cache(self.doppkit, urls, {}, progress=self.progressInterconnect)
         self.buttonDownload.setEnabled(True)
@@ -491,10 +473,13 @@ class ProgressTracking:
     rate: float = 0.0
     is_complete: bool = False
     rate_update_timer = time.perf_counter()
-    display_rate: str = "0.0 B/s"
 
     def ratio(self) -> float:
-        return self.current / self.total
+        ratio = self.current / self.total
+        # logger.debug(f"{self.current=}\t{self.total=}\t{ratio=}")
+        if ratio >= 1.0:
+            logger.warning("Completed download ratio calculated to be > 1.0, likely incorrect...")
+        return min([ratio, 1.0])
 
     def percentage(self) -> int:
         return math.floor(100 * self.ratio())
@@ -503,6 +488,7 @@ class ProgressTracking:
         return math.floor(((2 ** 32 - 1) // 2) * self.ratio())
 
     def update(self, current: int) -> None:
+        logger.debug(f"Updating Progress to {current=}")
         old_current = self.current
         self.current = current
         diff = current - old_current
@@ -510,23 +496,24 @@ class ProgressTracking:
         duration = now - self.elapsed
         self.rate = diff / duration
         if now - self.rate_update_timer > 1.0:
-            self.update_download_rate()
+            # self.update_download_rate()
             self.rate_update_timer = now
         self.elapsed = now
 
-    def update_download_rate(self):
-        if self.is_complete:
-            self.display_rate = "Complete"
-            return None
-
-        for exponent, prefix in zip((6, 3, 0), ("M", "k", "")):
-            multiple = 10 ** exponent
-            if self.rate > multiple:
-                self.display_rate = f"{(self.rate / multiple):.1f} {prefix}B/s"
-                break
-        else:
-            self.display_rate = "0.0 B/s"
-        return None
+    # "this is fine"
+    # def update_download_rate(self):
+        # if self.is_complete:
+        #     self.display_rate = "Complete"
+        #     return None
+        #
+        # for exponent, prefix in zip((6, 3, 0), ("M", "k", "")):
+        #     multiple = 10 ** exponent
+        #     if self.rate > multiple:
+        #         self.display_rate = f"{(self.rate / multiple):.1f} {prefix}B/s"
+        #         break
+        # else:
+        #     self.display_rate = "0.0 B/s"
+        # return None
 
     def __str__(self):
-        return f"{self.export_name} - ({self.display_rate})"
+        return f"{self.export_name}"

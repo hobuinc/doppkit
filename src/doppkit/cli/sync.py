@@ -3,16 +3,18 @@ from pathlib import Path
 
 from doppkit.grid import Grid
 from doppkit.cli.cache import cache
-from doppkit.cache import Content
-from typing import TYPE_CHECKING
+from doppkit.cache import Content, DownloadUrl
+from typing import Iterable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from doppkit.app import Application
 
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
 
-async def sync(args: 'Application', id_: str) -> list[Content]:
+
+async def sync(args: 'Application', id_: str) -> Iterable[Content]:
     """The main function for our script."""
 
     # Create a directory into which our downloads will go
@@ -22,8 +24,7 @@ async def sync(args: 'Application', id_: str) -> list[Content]:
 
     api = Grid(args)
     aois = await api.get_aois(int(id_))
-    # v3/v4 GRiD API compatabilty 
-    key = "id" if "id" in aois[0].keys() else "pk"
+
     if args.filter:
         logger.debug(f'Filtering AOIs with "{args.filter}"')
         aois = [aoi for aoi in aois if args.filter in aoi["notes"]]
@@ -31,14 +32,15 @@ async def sync(args: 'Application', id_: str) -> list[Content]:
     for aoi in aois:
         for export in aoi["exports"]:
             logger.debug(f"export: {export}")
-            files = await api.get_exports(export[key])
+            files = await api.get_exports(export["id"])
             exportfiles.extend(files)
+
     total_downloads = len(exportfiles)
     count = 0
     urls = []
     logger.debug(f"{total_downloads} files found, downloading to dir: {download_dir}")
-    for exportfile in sorted(exportfiles, key=lambda x: int(x.get(key))):
-        id_ = exportfile.get(key)
+    for exportfile in sorted(exportfiles, key=lambda x: int(x.get("id"))):
+        id_ = exportfile.get("id")
         if id_ < int(args.start_id):
             logger.info(f"Skipping file {id_}")
             total_downloads -= 1
@@ -55,7 +57,13 @@ async def sync(args: 'Application', id_: str) -> list[Content]:
         if not args.override and download_destination.exists():
             logger.debug(f"File already exists, skipping: {download_destination}")
         else:
-            urls.append(download_url)
+            urls.append(
+                DownloadUrl(
+                    download_url,
+                    exportfile.get("storage_path", "."),
+                    exportfile["filesize"]
+                )
+            )
     headers = {"Authorization": f"Bearer {args.token}"}
     logger.debug(urls, headers)
 

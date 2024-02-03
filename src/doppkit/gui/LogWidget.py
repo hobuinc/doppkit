@@ -95,8 +95,8 @@ class LoggingDialog(QtWidgets.QDialog):
         logging.CRITICAL: "Purple"
     }
 
-    def __init__(self) -> None:
-        super().__init__()
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
         self.resize(900, 400)
 
         # find the right handler...
