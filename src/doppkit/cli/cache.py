@@ -12,7 +12,7 @@ from rich.progress import (
 from doppkit.cache import cache as cache_generic
 if TYPE_CHECKING:
     from ..app import Application
-    from ..cache import Content
+    from ..cache import Content, DownloadUrl
 
 
 class RichProgress:
@@ -33,7 +33,7 @@ class RichProgress:
         self.context_manager.update(task, visible=False)
 
 
-async def cache(app: 'Application', urls: Iterable[str], headers) -> list[Union[Exception, 'Content']]:
+async def cache(app: 'Application', urls: Iterable['DownloadUrl'], headers) -> Iterable[Union[Exception, 'Content']]:
 
     text_column = TextColumn("{task.description}", table_column=Column(ratio=1))
     bar_column = BarColumn(bar_width=None, table_column=Column(ratio=2))
@@ -45,8 +45,6 @@ async def cache(app: 'Application', urls: Iterable[str], headers) -> list[Union[
         TransferSpeedColumn(),
         transient=True
     ) as progress:
-
         rich_progress = RichProgress(progress)
         files = await cache_generic(app, urls, headers, progress=rich_progress)
-
     return files
