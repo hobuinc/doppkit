@@ -289,10 +289,15 @@ class Grid:
             exports.append(j)
 
         files = []
+        auxfile_urls = set()
         for e in exports:
             ex = e['exports']
+
             for item in ex:
                 # need to construct "storage_path" attribute in exportfiles
                 files.extend(iter(item['exportfiles']))
-                files.extend(iter(item['auxfiles']))
+                for auxfile in item["auxfiles"]:
+                    if auxfile["url"] not in auxfile_urls:
+                        files.append(auxfile)
+                        auxfile_urls.add(auxfile["url"])
         return files

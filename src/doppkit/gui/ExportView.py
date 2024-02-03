@@ -22,12 +22,8 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
         item: Union['AOIItem', 'ExportItem'] = index.internalPointer()
         if isinstance(item, AOIItem):
             return super().paint(painter, option, index)
-
-        # v3/v4 GRiD API compatabilty 
-        key = "id" if "id" in item.export.keys() else "pk"
-
         try:
-            progress = item.progressInterconnect.export_progress[item.export[key]]
+            progress = item.progressInterconnect.export_progress[item.export["id"]]
         except KeyError:
             # when we're not actually tracking download progress...
             completed = -1  # minimum - 1 indicates progress hasn't started

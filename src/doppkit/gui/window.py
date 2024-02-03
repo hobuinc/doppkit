@@ -82,39 +82,24 @@ class QtProgress(QtCore.QObject):
             url,
             export_id=export_id,
             current=completed,
-            total=old_progress.total
+            total=old_progress.total,
+            is_complete=completed == old_progress.total
         )
 
         export_progress = self.export_progress[export_id]
-        export_progress.update(
-            sum(
-                file_progress.current
-                for file_progress
-                in self.export_files[export_id].values()
-            )
-        )
+
+        export_downloaded = sum(file_progress.current for file_progress in self.export_files[export_id].values())
+        logger.debug(f"{export_downloaded=}")
+        export_progress.update(export_downloaded)
         self.taskUpdated.emit(export_progress)
 
     def complete_task(self, name: str, url: str) -> None:
         export_id = self.urls_to_export_id[url]
         old_progress = self.export_files[export_id][url]
-        self.export_files[export_id][url] = ExportFileProgress(
-            url,
-            export_id,
-            current=old_progress.total,
-            total=old_progress.total,
-            is_complete=True
-        )
+
+        self.update(name, url, old_progress.total)
 
         export_progress = self.export_progress[export_id]
-        export_progress.update(
-            sum(
-                file_progress.current
-                for file_progress
-                in self.export_files[export_id].values()
-            )
-        )
-
         if all(export_file.is_complete for export_file in self.export_files[export_id].values()):
             export_progress.is_complete = True
             self.taskCompleted.emit(export_progress)
@@ -457,7 +442,13 @@ class Window(QtWidgets.QMainWindow):
                     if not self.doppkit.override and download_destination.exists():
                         logger.debug(f"File already exists, skipping {filename}")
                     else:
-                        urls.append(DownloadUrl(export_file["url"], export_file.get("storage_path", "."), export_file["filesize"]))
+                        urls.append(
+                            DownloadUrl(
+                                export_file["url"],
+                                export_file.get("storage_path", "."),
+                                export_file["filesize"]
+                            )
+                        )
                         self.progressInterconnect.urls_to_export_id[export_file["url"]] = export["id"]
                 progress_tracker = ProgressTracking(
                     export["id"],
@@ -465,7 +456,7 @@ class Window(QtWidgets.QMainWindow):
                     aoi_id=aoi["id"],
                     aoi_name=aoi["name"],
                     current=0,
-                    total=export["complete_size"],
+                    total=download_size   # export["complete_size"] is inaccurate for the time being...
                 )
                 self.progressInterconnect.export_progress[export["id"]] = progress_tracker
                 self.progressInterconnect.aois[aoi["id"]].append(progress_tracker)
@@ -489,6 +480,7 @@ class ProgressTracking:
 
     def ratio(self) -> float:
         ratio = self.current / self.total
+        # logger.debug(f"{self.current=}\t{self.total=}\t{ratio=}")
         if ratio >= 1.0:
             logger.warning("Completed download ratio calculated to be > 1.0, likely incorrect...")
         return min([ratio, 1.0])
@@ -500,6 +492,7 @@ class ProgressTracking:
         return math.floor(((2 ** 32 - 1) // 2) * self.ratio())
 
     def update(self, current: int) -> None:
+        logger.debug(f"Updating Progress to {current=}")
         old_current = self.current
         self.current = current
         diff = current - old_current
