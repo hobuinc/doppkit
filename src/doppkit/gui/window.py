@@ -30,8 +30,6 @@ class ExportFileProgress(NamedTuple):
     is_complete: bool = False
 
 
-
-
 class QtProgress(QtCore.QObject):
 
     taskCompleted = QtCore.Signal(object)
@@ -83,7 +81,7 @@ class QtProgress(QtCore.QObject):
             export_id=export_id,
             current=completed,
             total=old_progress.total,
-            is_complete=completed == old_progress.total
+            is_complete=completed >= old_progress.total
         )
 
         export_progress = self.export_progress[export_id]
@@ -111,7 +109,6 @@ class QtProgress(QtCore.QObject):
         pass
 
 
-
 class DirectoryValidator(QtGui.QValidator):
 
     def validate(self, input_: str, pos: int) -> tuple[QtGui.QValidator.State, str, int]:
@@ -120,7 +117,8 @@ class DirectoryValidator(QtGui.QValidator):
         else:
             state = QtGui.QValidator.State.Intermediate
         return state, input_, pos
-    
+
+
 class URLValidator(QtGui.QValidator):
 
     def validate(self, input_: str, pos: int) -> tuple[QtGui.QValidator.State, str, int]:
@@ -143,7 +141,6 @@ class Window(QtWidgets.QMainWindow):
 
     def __init__(self, doppkit_application, *args):
         super().__init__(*args)
-
 
         self.setGeometry(300, 300, 300, 220)
         self.setWindowTitle(f"doppkit - {__version__}")
@@ -301,7 +298,6 @@ class Window(QtWidgets.QMainWindow):
 
         self.progressInterconnect = QtProgress()
         self.show()
-    
 
     def closeEvent(self, evt: QtGui.QCloseEvent) -> None:
         settings = QtCore.QSettings()
@@ -437,7 +433,7 @@ class Window(QtWidgets.QMainWindow):
                 for export_file in export["exportfiles"]:
                     filename = export_file["name"]
                     download_destination = download_dir.joinpath(filename)
-                    download_size += export_file["filesize"]
+
                     # TODO: compare filesizes, not just if it exists
                     if not self.doppkit.override and download_destination.exists():
                         logger.debug(f"File already exists, skipping {filename}")
@@ -449,6 +445,7 @@ class Window(QtWidgets.QMainWindow):
                                 export_file["filesize"]
                             )
                         )
+                        download_size += export_file["filesize"]
                         self.progressInterconnect.urls_to_export_id[export_file["url"]] = export["id"]
                 progress_tracker = ProgressTracking(
                     export["id"],
@@ -476,7 +473,6 @@ class ProgressTracking:
     rate: float = 0.0
     is_complete: bool = False
     rate_update_timer = time.perf_counter()
-    display_rate: str = "0.0 B/s"
 
     def ratio(self) -> float:
         ratio = self.current / self.total
@@ -500,23 +496,24 @@ class ProgressTracking:
         duration = now - self.elapsed
         self.rate = diff / duration
         if now - self.rate_update_timer > 1.0:
-            self.update_download_rate()
+            # self.update_download_rate()
             self.rate_update_timer = now
         self.elapsed = now
 
-    def update_download_rate(self):
-        if self.is_complete:
-            self.display_rate = "Complete"
-            return None
-
-        for exponent, prefix in zip((6, 3, 0), ("M", "k", "")):
-            multiple = 10 ** exponent
-            if self.rate > multiple:
-                self.display_rate = f"{(self.rate / multiple):.1f} {prefix}B/s"
-                break
-        else:
-            self.display_rate = "0.0 B/s"
-        return None
+    # "this is fine"
+    # def update_download_rate(self):
+        # if self.is_complete:
+        #     self.display_rate = "Complete"
+        #     return None
+        #
+        # for exponent, prefix in zip((6, 3, 0), ("M", "k", "")):
+        #     multiple = 10 ** exponent
+        #     if self.rate > multiple:
+        #         self.display_rate = f"{(self.rate / multiple):.1f} {prefix}B/s"
+        #         break
+        # else:
+        #     self.display_rate = "0.0 B/s"
+        # return None
 
     def __str__(self):
-        return f"{self.export_name} - ({self.display_rate})"
+        return f"{self.export_name}"

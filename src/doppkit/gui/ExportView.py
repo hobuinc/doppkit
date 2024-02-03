@@ -32,7 +32,7 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
         else:
             completed = progress.int32_progress()
             text = progress.export_name
-            speed = progress.display_rate
+            # speed = progress.display_rate
 
         progressBarOption = QtWidgets.QStyleOptionProgressBar()
         progressBarOption.state = option.state | QtWidgets.QStyle.StateFlag.State_Horizontal
@@ -45,15 +45,16 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
 
         fontMetrics = QtGui.QFontMetrics(option.font)
 
-        speed_report_rect = fontMetrics.boundingRect(
-            option.rect,
-            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.TextFlag.TextSingleLine,
-            speed
-        )
+        # speed_report_rect = fontMetrics.boundingRect(
+        #     option.rect,
+        #     QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.TextFlag.TextSingleLine,
+        #     speed
+        # )
         item_name = fontMetrics.elidedText(
             text,
             QtCore.Qt.TextElideMode.ElideMiddle,
-            option.rect.width() - speed_report_rect.width()
+            option.rect.width()
+            # option.rect.width() - speed_report_rect.width()
         )
         text_name_rect = fontMetrics.boundingRect(
             option.rect,
@@ -73,11 +74,11 @@ class ExportDelegate(QtWidgets.QStyledItemDelegate):
             QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.TextFlag.TextSingleLine,
             item_name
         )
-        painter.drawText(
-            speed_report_rect,
-            QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.TextFlag.TextSingleLine,
-            speed
-        )
+        # painter.drawText(
+        #     speed_report_rect,
+        #     QtCore.Qt.AlignmentFlag.AlignRight | QtCore.Qt.TextFlag.TextSingleLine,
+        #     speed
+        # )
         painter.restore()
         return None
 
