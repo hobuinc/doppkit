@@ -149,8 +149,8 @@ async def cache_url(
             await response.aclose()
             response = await client.send(request, stream=True)
             total = max(total, int(response.headers.get("Content-length", 0)))
-        if filename is not None:
-            filename = pathlib.Path(url.storage_path.lstrip("/") / filename)
+        if filename is not None:  # we are not saving to BytesIO
+            filename = pathlib.Path(url.storage_path.lstrip("/"))
         c = Content(
             response.headers,
             filename=filename,
