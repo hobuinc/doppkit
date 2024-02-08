@@ -441,7 +441,7 @@ class Window(QtWidgets.QMainWindow):
                         urls.append(
                             DownloadUrl(
                                 export_file["url"],
-                                export_file.get("storage_path", "."),
+                                f"{export_file.get('storage_path', '.')}/{export_file['name']}",
                                 export_file["filesize"]
                             )
                         )
