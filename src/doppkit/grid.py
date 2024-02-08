@@ -232,7 +232,6 @@ class Grid:
             raise RuntimeError(f"GRiD Task Endpoint Returned Error {r.status_code}")
         return output
 
-
     async def get_exports(self, export_id: int) -> list[Union[Exportfile, Auxfile]]:
         """
         Parameters
@@ -300,7 +299,10 @@ class Grid:
                 for exportfile in iter(item['exportfiles']):
                     # we're dealing with older API before to storage_path attribute
                     if "storage_path" not in exportfile.keys():
-                        exportfile["storage_path"] =  f"./{exportfile['datatype']}{exportfile['storage_name'].rpartition(str(export_id))[-1]}"
+                        exportfile["storage_path"] = (
+                            f"./{exportfile['datatype']}"
+                            f"{exportfile['storage_name'].rpartition(str(export_id))[-1].rpartition('/')[0]}"
+                        )
                     files.append(exportfile)
                 for auxfile in item["auxfiles"]:
                     if auxfile["url"] not in auxfile_urls:

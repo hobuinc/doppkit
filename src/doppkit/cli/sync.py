@@ -60,7 +60,7 @@ async def sync(args: 'Application', id_: str) -> Iterable[Content]:
             urls.append(
                 DownloadUrl(
                     download_url,
-                    exportfile.get("storage_path", "."),
+                    f"{exportfile.get('storage_path', '.')}/{exportfile['name']}",
                     exportfile["filesize"]
                 )
             )
