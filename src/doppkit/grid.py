@@ -1,5 +1,6 @@
 __all__ = ["Grid", "Exportfile", "Export", "AOI"]
 
+import itertools
 import json
 import warnings
 import logging
@@ -288,24 +289,25 @@ class Grid:
             exports.append(j)
 
         files = []
-        auxfile_urls = set()
+        supplemental_urls = set()
         for e in exports:
             ex = e['exports']
             for item in ex:
-                # need to construct "storage_path" attribute in exportfiles
-                # currently have to reconstruct from "storage_name"
-                # format is /u02/exports/<userid>/<aoiid>/<exportid>/bits/we/care/about.tif
+
                 export_id = item["id"]
                 for exportfile in iter(item['exportfiles']):
                     # we're dealing with older API before to storage_path attribute
+                    # need to construct "storage_path" attribute in exportfiles
+                    # currently have to reconstruct from "storage_name"
+                    # format is /u02/exports/<userid>/<aoiid>/<exportid>/bits/we/care/about.tif
                     if "storage_path" not in exportfile.keys():
                         exportfile["storage_path"] = (
                             f"./{exportfile['datatype']}"
                             f"{exportfile['storage_name'].rpartition(str(export_id))[-1].rpartition('/')[0]}"
                         )
                     files.append(exportfile)
-                for auxfile in item["auxfiles"]:
-                    if auxfile["url"] not in auxfile_urls:
-                        files.append(auxfile)
-                        auxfile_urls.add(auxfile["url"])
+                for supplemental_file in itertools.chain(item["auxfiles"], item.get('licensefiles', [])):
+                    if supplemental_file["url"] not in supplemental_urls:
+                        files.append(supplemental_file)
+                        supplemental_urls.add(supplemental_file["url"])
         return files
