@@ -87,7 +87,6 @@ class QtProgress(QtCore.QObject):
         export_progress = self.export_progress[export_id]
 
         export_downloaded = sum(file_progress.current for file_progress in self.export_files[export_id].values())
-        logger.debug(f"{export_downloaded=}")
         export_progress.update(export_downloaded)
         self.taskUpdated.emit(export_progress)
 
@@ -441,7 +440,7 @@ class Window(QtWidgets.QMainWindow):
                         urls.append(
                             DownloadUrl(
                                 export_file["url"],
-                                f"{export_file.get('storage_path', '.')}/{export_file['name']}",
+                                f"{export_file['storage_path'].strip('/')}/{export_file['name']}",
                                 export_file["filesize"]
                             )
                         )
@@ -475,8 +474,10 @@ class ProgressTracking:
     rate_update_timer = time.perf_counter()
 
     def ratio(self) -> float:
-        ratio = self.current / self.total
-        # logger.debug(f"{self.current=}\t{self.total=}\t{ratio=}")
+        try:
+            ratio = self.current / self.total
+        except ZeroDivisionError:
+            ratio = 0.0
         if ratio >= 1.0:
             logger.warning("Completed download ratio calculated to be > 1.0, likely incorrect...")
         return min([ratio, 1.0])
@@ -488,7 +489,6 @@ class ProgressTracking:
         return math.floor(((2 ** 32 - 1) // 2) * self.ratio())
 
     def update(self, current: int) -> None:
-        logger.debug(f"Updating Progress to {current=}")
         old_current = self.current
         self.current = current
         diff = current - old_current
