@@ -36,20 +36,16 @@ def listExports(args, id_):
     table = Table(title=f"Exports for {aoi['name']} – {id_}")
 
     table.add_column("Export ID")
-    table.add_column("Item ID")
     table.add_column("Name")
-    table.add_column("Type")
     table.add_column("Size")
     if aoi.get('exports'):
         for export in aoi['exports']:
             export_id = export['id']
-            exports =  asyncio.run(api.get_exports(export_id))
+            exports = asyncio.run(api.get_exports(export_id))
             for e in exports:
                 table.add_row(
                     str(export_id),
-                    str(e['id']),
-                    e['name'],
-                    e['datatype'],
-                    str(e['filesize'])
+                    e.name,
+                    str(e.total)
                 )
     console.print(table)

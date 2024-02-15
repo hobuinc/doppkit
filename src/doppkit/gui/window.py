@@ -75,6 +75,7 @@ class QtProgress(QtCore.QObject):
 
     def update(self, name: str, url: str, completed: int) -> None:
         export_id = self.urls_to_export_id[url]
+
         old_progress = self.export_files[export_id][url]
         self.export_files[export_id][url] = ExportFileProgress(
             url,
@@ -85,7 +86,6 @@ class QtProgress(QtCore.QObject):
         )
 
         export_progress = self.export_progress[export_id]
-
         export_downloaded = sum(file_progress.current for file_progress in self.export_files[export_id].values())
         export_progress.update(export_downloaded)
         self.taskUpdated.emit(export_progress)
@@ -421,31 +421,23 @@ class Window(QtWidgets.QMainWindow):
         urls = []
         for aoi in self.AOIs:
             for export in aoi["exports"]:
-                # need to check for export_files, if not present, we need to populate
-                if isinstance(export["exportfiles"], bool):
-                    # we need to grab the list of exportfiles...
-                    export["exportfiles"] = await api.get_exports(export["id"])
-                elif 'auxfiles' in export.keys():
-                    export["exportfiles"].extend(export["auxfiles"])
+                files = await api.get_exports(export["id"])
 
                 download_size = 0
-                for export_file in export["exportfiles"]:
-                    filename = export_file["name"]
-                    download_destination = download_dir.joinpath(filename)
+                for download_file in files:
+                    filename = download_file.name
+                    download_destination = download_dir.joinpath(download_file.save_path)
 
                     # TODO: compare filesizes, not just if it exists
                     if not self.doppkit.override and download_destination.exists():
                         logger.debug(f"File already exists, skipping {filename}")
                     else:
                         urls.append(
-                            DownloadUrl(
-                                export_file["url"],
-                                f"{export_file['storage_path'].strip('/')}/{export_file['name']}",
-                                export_file["filesize"]
-                            )
+                            download_file
                         )
-                        download_size += export_file["filesize"]
-                        self.progressInterconnect.urls_to_export_id[export_file["url"]] = export["id"]
+                        print(f"{download_file.save_path} = {download_file.total} bytes")
+                        download_size += download_file.total
+                        self.progressInterconnect.urls_to_export_id[download_file.url] = export["id"]
                 progress_tracker = ProgressTracking(
                     export["id"],
                     export_name=export["name"],
@@ -478,9 +470,15 @@ class ProgressTracking:
             ratio = self.current / self.total
         except ZeroDivisionError:
             ratio = 0.0
-        if ratio >= 1.0:
-            logger.warning("Completed download ratio calculated to be > 1.0, likely incorrect...")
-        return min([ratio, 1.0])
+        else:
+            if math.floor(100 * ratio) > 100:
+                logger.warning(
+                    f"Completed download ratio for {self.export_name} calculated "
+                    f"to be {self.current=}/{self.total=}={ratio} (> 1.0), "
+                    "likely incorrect..."
+                )
+                return 1.0
+        return ratio
 
     def percentage(self) -> int:
         return math.floor(100 * self.ratio())
