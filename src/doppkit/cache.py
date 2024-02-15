@@ -20,7 +20,8 @@ logger = logging.getLogger(__name__)
 
 class DownloadUrl(NamedTuple):
     url: str
-    storage_path: str = "."
+    name: str = ""
+    save_path: str = "."
     total: int = 1
 
 
@@ -92,7 +93,7 @@ async def cache(
         app: 'Application',
         urls: Iterable[DownloadUrl],
         headers: dict[str, str],
-        progress: Optional[Progress]=None
+        progress: Optional[Progress] = None
 ) -> Iterable[Union[Content, Exception, httpx.Response]]:
     limits = httpx.Limits(
         max_keepalive_connections=app.threads, max_connections=app.threads
@@ -118,7 +119,7 @@ async def cache(
             ],
             return_exceptions=True
         )
-    logger.debug("Cache operation complete.")
+    logger.info(f"Cache operation complete for {len(files)} files.")
     return files
 
 
@@ -131,6 +132,8 @@ async def cache_url(
 ) -> Union[Content, httpx.Response]:
     limit = args.limit
     async with limit:
+        if url.name:
+            logger.info(f"Getting {url.name}...")
         request = client.build_request("GET", url.url, headers=headers, timeout=None)
         response = await client.send(request, stream=True)
         if response.is_error:
@@ -150,7 +153,7 @@ async def cache_url(
             response = await client.send(request, stream=True)
             total = max(total, int(response.headers.get("Content-length", 0)))
         if filename is not None:  # we are not saving to BytesIO
-            filename = pathlib.Path(url.storage_path.lstrip("/"))
+            filename = pathlib.Path(url.save_path.lstrip("/"))
         c = Content(
             response.headers,
             filename=filename,

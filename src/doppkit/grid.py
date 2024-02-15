@@ -43,6 +43,11 @@ class Auxfile(TypedDict):
     url: str
     strage_path: str
 
+class Licensefile(TypedDict):
+    filesize: int
+    url: str
+    name: str
+    storage_path: str
 
 class VectorProduct(TypedDict):
     id: int
@@ -74,6 +79,7 @@ class Export(TypedDict):
     datatype: str
     export_type: str
     exportfiles: Union[list[Exportfile], bool]
+    licensefiles: list[Licensefile]
     export_total_size: int
     auxfile_total_size: int
     complete_size: int
@@ -110,6 +116,8 @@ class AOI(TypedDict):
     mesh_intersects: list[MeshProduct]
     pointcloud_intersects: list[PointcloudProduct]
     vector_intersects: list[VectorProduct]
+
+
 
 
 class Grid:
@@ -233,7 +241,7 @@ class Grid:
             raise RuntimeError(f"GRiD Task Endpoint Returned Error {r.status_code}")
         return output
 
-    async def get_exports(self, export_id: int) -> list[Union[Exportfile, Auxfile]]:
+    async def get_exports(self, export_id: int) -> list[DownloadUrl]:
         """
         Parameters
         ----------
@@ -305,9 +313,23 @@ class Grid:
                             f"./{exportfile['datatype']}"
                             f"{exportfile['storage_name'].rpartition(str(export_id))[-1].rpartition('/')[0]}"
                         )
-                    files.append(exportfile)
+                    files.append(
+                        DownloadUrl(
+                            url=exportfile["url"],
+                            save_path=f"{item['name']}/{exportfile['storage_path'].strip('/')}/{exportfile['name']}",
+                            total=exportfile["filesize"],
+                            name=exportfile["name"]
+                        )
+                    )
                 for supplemental_file in itertools.chain(item["auxfiles"], item.get('licensefiles', [])):
                     if supplemental_file["url"] not in supplemental_urls:
-                        files.append(supplemental_file)
+                        files.append(
+                            DownloadUrl(
+                                url=supplemental_file["url"],
+                                save_path=f"{item['name']}/{supplemental_file['storage_path'].strip('/')}/{supplemental_file['name']}",
+                                total=supplemental_file["filesize"],
+                                name=supplemental_file["name"]
+                            )
+                        )
                         supplemental_urls.add(supplemental_file["url"])
         return files
