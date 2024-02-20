@@ -4,6 +4,7 @@ import logging
 import pathlib
 
 from doppkit.app import Application
+from doppkit import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,7 @@ logger = logging.getLogger(__name__)
     type=bool,
     help="Disable SSL verification of URLs",
 )
+@click.version_option(version=__version__, message=f"doppkit {__version__}")
 @click.pass_context
 def cli(ctx, token, url, log_level, threads, progress, disable_ssl_verification):
 
@@ -95,6 +97,7 @@ def listAOIs(app, filter):
 def listExports(app, id):
     from doppkit.cli.list import listExports as listExportsFunction
     listExportsFunction(app, id)
+
 
 if __name__ == "__main__":
     cli()
