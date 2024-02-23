@@ -369,7 +369,11 @@ class Window(QtWidgets.QMainWindow):
             # there is no AOI entered...
             self.buttonList.setEnabled(True)
             return None
-        self.AOIs = await api.get_aois(self.AOI_ids[0])
+        try:
+            self.AOIs = await api.get_aois(self.AOI_ids[0])
+        finally:
+            # no need to elave the button list grayed out if there is an exception...
+            self.buttonList.setEnabled(True)
         model = ExportModel()
         model.clear()
 
@@ -397,9 +401,7 @@ class Window(QtWidgets.QMainWindow):
         treeViewSize = self.exportView.size()
         treeViewSize.setWidth(400)
         self.exportView.resize(treeViewSize)
-
         self.exportView.show()
-        self.buttonList.setEnabled(True)
 
 
     @qasync.asyncSlot()
@@ -435,7 +437,6 @@ class Window(QtWidgets.QMainWindow):
                         urls.append(
                             download_file
                         )
-                        print(f"{download_file.save_path} = {download_file.total} bytes")
                         download_size += download_file.total
                         self.progressInterconnect.urls_to_export_id[download_file.url].append(export["id"])
                 progress_tracker = ProgressTracking(
@@ -449,8 +450,11 @@ class Window(QtWidgets.QMainWindow):
                 self.progressInterconnect.export_progress[export["id"]] = progress_tracker
                 self.progressInterconnect.aois[aoi["id"]].append(progress_tracker)
 
-        _ = await cache(self.doppkit, urls, {}, progress=self.progressInterconnect)
-        self.buttonDownload.setEnabled(True)
+        try:
+            _ = await cache(self.doppkit, urls, {}, progress=self.progressInterconnect)
+            logger.info("Download AOI Exports Complete")
+        finally:
+            self.buttonDownload.setEnabled(True)
 
 @dataclass
 class ProgressTracking:

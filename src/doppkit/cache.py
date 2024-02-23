@@ -5,6 +5,7 @@ import contextlib
 import pathlib
 import logging
 import asyncio
+import shutil
 import httpx
 from io import BytesIO
 from .util import parse_options_header
@@ -35,6 +36,8 @@ class Progress(Protocol):
     
     def complete_task(self, name: str, url: str) -> None:
         ...
+
+
 
 
 class Content:
@@ -87,6 +90,9 @@ class Content:
             raise NotImplementedError("data intended to be used with BytesIO objects")
 
     data = property(get_data)
+
+
+completed_downloads: dict[str, Content] = dict()
 
 
 async def cache(
@@ -179,15 +185,27 @@ async def cache_url(
             # create parent directory/directories if needed
             if c.target.parent is not None:
                 c.target.parent.mkdir(parents=True, exist_ok=True)
-            # we are writing to disk asynchronously
-            async with aiofiles.open(c.target, "wb+") as f:
-                async for chunk in response.aiter_bytes():
-                    await f.write(chunk)
-                    chunk_count += 1
-                    if args.progress and progress is not None:
-                        progress.update(
-                            name, url.url, completed=response.num_bytes_downloaded
-                        )
+
+            # check if we already downloaded this asset
+            if url.url in completed_downloads:
+                # get the path stored previously
+                previous_content = completed_downloads[url.url]
+                logger.info(f"Download cache hit on {c.target.name}, copying from {previous_content.target}")
+                shutil.copy(previous_content.target, c.target)
+            else:
+                # we are writing to disk asynchronously
+                async with aiofiles.open(c.target, "wb+") as f:
+                    async for chunk in response.aiter_bytes():
+                        await f.write(chunk)
+                        chunk_count += 1
+                        if args.progress and progress is not None:
+                            progress.update(
+                                name,
+                                url.url,
+                                completed=response.num_bytes_downloaded
+                            )
+                completed_downloads[url.url] = c
+
         if args.progress and progress is not None:
             # we can hide the task now that it's finished
             progress.complete_task(name, url.url)
