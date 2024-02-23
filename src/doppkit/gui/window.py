@@ -44,7 +44,7 @@ class QtProgress(QtCore.QObject):
         # key is AOI PK
         self.aois: dict[int, list[ProgressTracking]] = defaultdict(list)
 
-        self.urls_to_export_id: dict[str, int] = {}
+        self.urls_to_export_id: dict[str, list[int]] = defaultdict(list)
 
         self.export_files: dict[int, dict[str, ExportFileProgress]] = defaultdict(dict)
 
@@ -66,40 +66,40 @@ class QtProgress(QtCore.QObject):
             None
         """
 
-        export_id = self.urls_to_export_id[url]
-        self.export_files[export_id][url] = ExportFileProgress(
-            url,
-            export_id=export_id,
-            total=total
-        )
+        export_ids = self.urls_to_export_id[url]
+        for export_id in export_ids:
+            self.export_files[export_id][url] = ExportFileProgress(
+                url,
+                export_id=export_id,
+                total=total
+            )
 
     def update(self, name: str, url: str, completed: int) -> None:
-        export_id = self.urls_to_export_id[url]
-
-        old_progress = self.export_files[export_id][url]
-        self.export_files[export_id][url] = ExportFileProgress(
-            url,
-            export_id=export_id,
-            current=completed,
-            total=old_progress.total,
-            is_complete=completed >= old_progress.total
-        )
-
-        export_progress = self.export_progress[export_id]
-        export_downloaded = sum(file_progress.current for file_progress in self.export_files[export_id].values())
-        export_progress.update(export_downloaded)
-        self.taskUpdated.emit(export_progress)
+        export_ids = self.urls_to_export_id[url]
+        for export_id in export_ids:
+            old_progress = self.export_files[export_id][url]
+            self.export_files[export_id][url] = ExportFileProgress(
+                url,
+                export_id=export_id,
+                current=completed,
+                total=old_progress.total,
+                is_complete=completed >= old_progress.total
+            )
+            export_progress = self.export_progress[export_id]
+            export_downloaded = sum(file_progress.current for file_progress in self.export_files[export_id].values())
+            export_progress.update(export_downloaded)
+            self.taskUpdated.emit(export_progress)
 
     def complete_task(self, name: str, url: str) -> None:
-        export_id = self.urls_to_export_id[url]
-        old_progress = self.export_files[export_id][url]
+        export_ids = self.urls_to_export_id[url]
 
-        self.update(name, url, old_progress.total)
-
-        export_progress = self.export_progress[export_id]
-        if all(export_file.is_complete for export_file in self.export_files[export_id].values()):
-            export_progress.is_complete = True
-            self.taskCompleted.emit(export_progress)
+        for export_id in export_ids:
+            old_progress = self.export_files[export_id][url]
+            self.update(name, url, old_progress.total)
+            export_progress = self.export_progress[export_id]
+            if all(export_file.is_complete for export_file in self.export_files[export_id].values()):
+                export_progress.is_complete = True
+                self.taskCompleted.emit(export_progress)
 
     def update_export_progress(self):
         pass
@@ -369,7 +369,11 @@ class Window(QtWidgets.QMainWindow):
             # there is no AOI entered...
             self.buttonList.setEnabled(True)
             return None
-        self.AOIs = await api.get_aois(self.AOI_ids[0])
+        try:
+            self.AOIs = await api.get_aois(self.AOI_ids[0])
+        finally:
+            # no need to elave the button list grayed out if there is an exception...
+            self.buttonList.setEnabled(True)
         model = ExportModel()
         model.clear()
 
@@ -397,9 +401,7 @@ class Window(QtWidgets.QMainWindow):
         treeViewSize = self.exportView.size()
         treeViewSize.setWidth(400)
         self.exportView.resize(treeViewSize)
-
         self.exportView.show()
-        self.buttonList.setEnabled(True)
 
 
     @qasync.asyncSlot()
@@ -435,9 +437,8 @@ class Window(QtWidgets.QMainWindow):
                         urls.append(
                             download_file
                         )
-                        print(f"{download_file.save_path} = {download_file.total} bytes")
                         download_size += download_file.total
-                        self.progressInterconnect.urls_to_export_id[download_file.url] = export["id"]
+                        self.progressInterconnect.urls_to_export_id[download_file.url].append(export["id"])
                 progress_tracker = ProgressTracking(
                     export["id"],
                     export_name=export["name"],
@@ -449,8 +450,11 @@ class Window(QtWidgets.QMainWindow):
                 self.progressInterconnect.export_progress[export["id"]] = progress_tracker
                 self.progressInterconnect.aois[aoi["id"]].append(progress_tracker)
 
-        _ = await cache(self.doppkit, urls, {}, progress=self.progressInterconnect)
-        self.buttonDownload.setEnabled(True)
+        try:
+            _ = await cache(self.doppkit, urls, {}, progress=self.progressInterconnect)
+            logger.info("Download AOI Exports Complete")
+        finally:
+            self.buttonDownload.setEnabled(True)
 
 @dataclass
 class ProgressTracking:
