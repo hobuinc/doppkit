@@ -78,7 +78,7 @@ jobs:
         run: |
           &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit-cli.zip ./dist/doppkit-cli.exe
       - name: Upload Release Asset
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/doppkit-cli.zip
@@ -134,7 +134,7 @@ jobs:
         run: |
           &"C:/Program Files/7-Zip/7z.exe" a ./dist/doppkit.zip ./dist/doppkit.exe
       - name: Upload Release Asset
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/doppkit.zip
