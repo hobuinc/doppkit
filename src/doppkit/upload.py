@@ -4,12 +4,15 @@ import aiofiles
 import pathlib
 import logging
 import asyncio
+import os
 import httpx
-import http
 from urllib.parse import urlparse, parse_qs
 from collections import defaultdict
 
-from typing import NamedTuple, TypedDict
+from typing import NamedTuple, TypedDict, Optional
+
+from .cache import Progress
+from .app import Application
 
 class ETagDict(TypedDict):
     ETag: str
@@ -20,19 +23,28 @@ logger = logging.getLogger(__name__)
 file_shared_lock = asyncio.Lock()
 part_info = defaultdict(list)
 async def upload(
+        app: 'Application',
         filepath: pathlib.Path,
         urls: list[str],
         bytes_per_chunk:int,
-        auth_header: dict[str, str]
+        auth_header: dict[str, str],
+        progress: Optional[Progress] = None
 ) -> list[ETagDict]:
     
     part_info[filepath].clear()
     tasks = []
     source_size = filepath.stat().st_size
+    if progress is not None:
+        progress.create_task(
+            filepath.name,
+            filepath.as_posix(),
+            total=source_size
+        )
     async with httpx.AsyncClient() as client:
         async with aiofiles.open(filepath, mode='rb') as f:
             tasks.extend(
                 upload_chunk(
+                    app=app,
                     client=client,
                     file_buffer=f,
                     file_path=filepath,
@@ -40,7 +52,8 @@ async def upload(
                     bytes_per_chunk=bytes_per_chunk,
                     source_size=source_size,
                     url=url,
-                    auth_header=auth_header
+                    auth_header=auth_header,
+                    progress=progress
                 )
                 for chunk_number, url in enumerate(urls)
             )
@@ -48,9 +61,12 @@ async def upload(
     parts = part_info[filepath].copy()
     # grid needs this list sorted by part number
     parts.sort(key=lambda part: part["PartNumber"])
+    if app.progress and progress is not None:
+        progress.complete_task(filepath.name, filepath.as_posix())
     return parts
 
 async def upload_chunk(
+    app: 'Application',
     client: httpx.AsyncClient,
     file_buffer: aiofiles.threadpool.binary.AsyncBufferedReader,
     file_path: pathlib.Path,
@@ -58,7 +74,8 @@ async def upload_chunk(
     bytes_per_chunk: int,
     source_size: int,
     url: str,
-    auth_header: dict[str, str]
+    auth_header: dict[str, str],
+    progress: Optional[Progress] = None
 ):
     offset = chunk_number * bytes_per_chunk
     remaining_bytes = source_size - offset
@@ -103,6 +120,15 @@ async def upload_chunk(
             break
     else:
         raise httpx.ReadError
+
+    if app.progress and progress is not None:
+        old_progress = progress.upload_progress[file_path.as_posix()]
+        new_completition = old_progress.current + bytes_to_read
+        progress.update(
+            os.path.basename(file_path),
+            file_path.as_posix(),
+            completed=new_completition
+        )
 
     part_info[file_path].append(
         {

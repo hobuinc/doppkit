@@ -28,13 +28,13 @@ class DownloadUrl(NamedTuple):
 
 class Progress(Protocol):
 
-    def update(self, name: str, url: str, completed: int) -> None:
+    def update(self, name: str, source: str, completed: int) -> None:
         ...
 
-    def create_task(self, name: str, url: str, total: int) -> None:
+    def create_task(self, name: str, source: str, total: int) -> None:
         ...
     
-    def complete_task(self, name: str, url: str) -> None:
+    def complete_task(self, name: str, source: str) -> None:
         ...
 
 

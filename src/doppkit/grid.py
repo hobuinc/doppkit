@@ -12,7 +12,7 @@ import math
 import httpx
 from typing import Optional, Iterable, TypedDict, Union, TYPE_CHECKING
 
-from .cache import cache, DownloadUrl
+from .cache import cache, DownloadUrl, Progress
 from .upload import upload
 
 if TYPE_CHECKING:
@@ -180,12 +180,14 @@ class Grid:
     async def upload_asset(
             self,
             filepath: pathlib.Path,
-            bytes_per_chunk=MULTIPART_BYTES_PER_CHUNK
+            bytes_per_chunk=MULTIPART_BYTES_PER_CHUNK,
+            progress: Optional[Progress]=None
     ):
+        logger.info(f"Starting upload of {filepath}")
         source_size = filepath.stat().st_size
         chunks_count = int(math.ceil(source_size / float(bytes_per_chunk)))
 
-        key = f"upload/{filepath.name}"
+        key = f"test-ogi/upload/{filepath.name}"
         upload_endpoint_url = f"{self.args.url}{upload_endpoint_ext}"
 
         params = {"key": key}
@@ -197,6 +199,7 @@ class Grid:
                 params=params,
                 headers=headers
             )
+            logger.debug(f"Upload open call returned {response_upload_id}")
 
             try:
                 upload_id = response_upload_id.json()["upload_id"]
@@ -223,10 +226,12 @@ class Grid:
             ]
 
             part_info = await upload(
+                app=self.args,
                 filepath=filepath,
                 urls=urls,
                 bytes_per_chunk=bytes_per_chunk,
-                auth_header=headers
+                auth_header=headers,
+                progress=progress
             )
 
             data = {
@@ -240,6 +245,8 @@ class Grid:
                 json=data,
                 headers=headers
             )
+            logger.debug(f"Upload close call returned {response_finish}")
+            logger.info(f"Finished upload of {filepath}")
 
         return None
 

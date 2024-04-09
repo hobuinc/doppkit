@@ -16,6 +16,7 @@ import qasync
 
 
 from .ExportView import ExportModel, ExportDelegate
+from .UploadView import UploadModel, UploadItem, UploadDelegate
 from .LogWidget import LoggingDialog
 from .MenuBar import MenuBar
 
@@ -30,7 +31,72 @@ class ExportFileProgress(NamedTuple):
     is_complete: bool = False
 
 
-class QtProgress(QtCore.QObject):
+class UploadFileProgress(NamedTuple):
+    path: str
+    current: int = 0
+    total: int = 1
+    is_complete: bool = False
+
+class QtUploadProgress(QtCore.QObject):
+
+    taskCompleted = QtCore.Signal(object)
+    taskAdded = QtCore.Signal(object)
+    taskUpdated = QtCore.Signal(object)
+
+
+    def __init__(self):
+        super().__init__()
+
+        # key is filepath
+        self.upload_progress: dict[str, UploadProgressTracking] = {}
+
+    def create_task(self, name: str, source: str, total: int):
+        """
+        Method adds a task to track the download progress
+
+        Parameters
+        ----------
+        name
+            The name of the file being downloaded
+        source
+            The filepath to file being uploaded
+        total
+            The total size of the file in bytes
+
+        Returns
+        -------
+            None
+        """
+        self.upload_progress[source] = UploadProgressTracking(
+            source,
+            current=0,
+            total=total
+        )
+
+
+    def update(self, name: str, source: str, completed: int) -> None:
+        old_progress = self.upload_progress[source]
+        new_progress = UploadProgressTracking(
+            source,
+            current=completed,
+            total=old_progress.total
+        )
+        self.upload_progress[source] = new_progress
+        self.taskUpdated.emit(new_progress)
+
+    def complete_task(self, name: str, source: str) -> None:
+        old_progress = self.upload_progress[source]
+        self.update(
+            name,
+            source,
+            completed=old_progress.total
+        )
+        new_progress = self.upload_progress[source]
+        self.taskCompleted.emit(new_progress)
+
+
+
+class QtExportProgress(QtCore.QObject):
 
     taskCompleted = QtCore.Signal(object)
     taskAdded = QtCore.Signal(object)
@@ -39,16 +105,16 @@ class QtProgress(QtCore.QObject):
     def __init__(self):
         super().__init__()
         # key is the export PK
-        self.export_progress: dict[int, ProgressTracking] = {}
+        self.export_progress: dict[int, ExportProgressTracking] = {}
 
         # key is AOI PK
-        self.aois: dict[int, list[ProgressTracking]] = defaultdict(list)
+        self.aois: dict[int, list[ExportProgressTracking]] = defaultdict(list)
 
         self.urls_to_export_id: dict[str, list[int]] = defaultdict(list)
 
         self.export_files: dict[int, dict[str, ExportFileProgress]] = defaultdict(dict)
 
-    def create_task(self, name: str, url: str, total: int):
+    def create_task(self, name: str, source: str, total: int):
         """
         Method adds a task to track the download progress
 
@@ -56,7 +122,7 @@ class QtProgress(QtCore.QObject):
         ----------
         name
             The name of the file being downloaded
-        url
+        source
             The URL to contents of the file are being downloaded from
         total
             The total size of the file in bytes
@@ -66,20 +132,20 @@ class QtProgress(QtCore.QObject):
             None
         """
 
-        export_ids = self.urls_to_export_id[url]
+        export_ids = self.urls_to_export_id[source]
         for export_id in export_ids:
-            self.export_files[export_id][url] = ExportFileProgress(
-                url,
+            self.export_files[export_id][source] = ExportFileProgress(
+                source,
                 export_id=export_id,
                 total=total
             )
 
-    def update(self, name: str, url: str, completed: int) -> None:
-        export_ids = self.urls_to_export_id[url]
+    def update(self, name: str, source: str, completed: int) -> None:
+        export_ids = self.urls_to_export_id[source]
         for export_id in export_ids:
-            old_progress = self.export_files[export_id][url]
-            self.export_files[export_id][url] = ExportFileProgress(
-                url,
+            old_progress = self.export_files[export_id][source]
+            self.export_files[export_id][source] = ExportFileProgress(
+                source,
                 export_id=export_id,
                 current=completed,
                 total=old_progress.total,
@@ -90,12 +156,12 @@ class QtProgress(QtCore.QObject):
             export_progress.update(export_downloaded)
             self.taskUpdated.emit(export_progress)
 
-    def complete_task(self, name: str, url: str) -> None:
-        export_ids = self.urls_to_export_id[url]
+    def complete_task(self, name: str, source: str) -> None:
+        export_ids = self.urls_to_export_id[source]
 
         for export_id in export_ids:
-            old_progress = self.export_files[export_id][url]
-            self.update(name, url, old_progress.total)
+            old_progress = self.export_files[export_id][source]
+            self.update(name, source, old_progress.total)
             export_progress = self.export_progress[export_id]
             if all(export_file.is_complete for export_file in self.export_files[export_id].values()):
                 export_progress.is_complete = True
@@ -147,7 +213,7 @@ class Window(QtWidgets.QMainWindow):
         self.AOI_ids: list[int] = []
         self.AOIs: list[AOI] = []  # populated from GRiD
 
-        self.progressTracker = QtProgress()
+        self.exportProgressTracker = QtExportProgress()
 
         # Download Progress Viewer
         self.exportView = None
@@ -281,6 +347,7 @@ class Window(QtWidgets.QMainWindow):
 
         # populate fields with previously stored values or defaults otherwise
         tokenLineEdit.setText(settings.value("grid/token"))
+        self.doppkit.token = settings.value("grid/token")
 
         urlLineComboBox.setEditText(str(settings.value("grid/url", "https://grid.nga.mil/grid")))
         
@@ -295,8 +362,10 @@ class Window(QtWidgets.QMainWindow):
             )
         )
 
-        self.progressInterconnect = QtProgress()
+        self.progressInterconnect = QtExportProgress()
+        self.uploadProgressInterconnect = QtUploadProgress()
         self.show()
+
 
     def closeEvent(self, evt: QtGui.QCloseEvent) -> None:
         settings = QtCore.QSettings()
@@ -342,6 +411,39 @@ class Window(QtWidgets.QMainWindow):
         self.doppkit.token = self.sender().text().strip()
         setting = QtCore.QSettings()
         setting.setValue("grid/token", self.doppkit.token)
+
+    @qasync.asyncSlot()
+    async def uploadFiles(self, files: list[str]):
+
+        items = [
+            UploadItem(filepath, self.uploadProgressInterconnect)
+            for filepath in files
+        ]
+
+        api = Grid(self.doppkit)
+        model = UploadModel()
+        model.load(items, self.uploadProgressInterconnect)
+
+        self.uploadView = QtWidgets.QListView()
+        self.uploadView.setSelectionMode(
+            QtWidgets.QAbstractItemView.SelectionMode.NoSelection
+        )
+        self.uploadView.setWordWrap(False)
+
+        self.uploadView.setModel(model)
+        self.uploadView.setTextElideMode(QtCore.Qt.TextElideMode.ElideMiddle)
+        self.uploadView.setUniformItemSizes(True)
+        self.uploadView.setModel(model)
+        self.uploadView.setItemDelegateForColumn(0, UploadDelegate())
+        self.uploadView.show()
+
+        for file_ in files:
+            await api.upload_asset(
+                pathlib.Path(file_),
+                progress=self.uploadProgressInterconnect
+            )
+
+        logger.debug("Uploads Finished")
 
     @qasync.asyncSlot()
     async def listExports(self):
@@ -439,7 +541,7 @@ class Window(QtWidgets.QMainWindow):
                         )
                         download_size += download_file.total
                         self.progressInterconnect.urls_to_export_id[download_file.url].append(export["id"])
-                progress_tracker = ProgressTracking(
+                progress_tracker = ExportProgressTracking(
                     export["id"],
                     export_name=export["name"],
                     aoi_id=aoi["id"],
@@ -456,8 +558,54 @@ class Window(QtWidgets.QMainWindow):
         finally:
             self.buttonDownload.setEnabled(True)
 
+
 @dataclass
-class ProgressTracking:
+class UploadProgressTracking:
+    path: str
+    current: int
+    total: int
+    elapsed: float = time.perf_counter()
+    rate: float = 0.0
+    is_complete: bool = False
+    rate_update_timer = time.perf_counter()
+
+    def ratio(self) -> float:
+        try:
+            ratio = self.current / self.total
+        except ZeroDivisionError:
+            ratio = 0.0
+        else:
+            if math.floor(100 * ratio) > 100:
+                logger.warning(
+                    f"Completed download ratio for {os.path.basename(self.path)} calculated " +
+                    f"to be {self.current=}/{self.total=}={ratio} (> 1.0), " +
+                    "likely incorrect..."
+                )
+                return 1.0
+        return ratio
+
+    def percentage(self) -> int:
+        return math.floor(100 * self.ratio())
+
+    def int32_progress(self):
+        return math.floor(((2 ** 32 - 1) // 2) * self.ratio())
+
+    def update(self, current: int) -> None:
+        old_current = self.current
+        self.current = current
+        diff = current - old_current
+        now = time.perf_counter()
+        duration = now - self.elapsed
+        self.rate = diff / duration
+        if now - self.rate_update_timer > 1.0:
+            # self.update_download_rate()
+            self.rate_update_timer = now
+        self.elapsed = now
+
+
+
+@dataclass
+class ExportProgressTracking:
     export_id: int
     export_name: str
     aoi_id: int
@@ -477,8 +625,8 @@ class ProgressTracking:
         else:
             if math.floor(100 * ratio) > 100:
                 logger.warning(
-                    f"Completed download ratio for {self.export_name} calculated "
-                    f"to be {self.current=}/{self.total=}={ratio} (> 1.0), "
+                    f"Completed download ratio for {self.export_name} calculated " +
+                    f"to be {self.current=}/{self.total=}={ratio} (> 1.0), " +
                     "likely incorrect..."
                 )
                 return 1.0

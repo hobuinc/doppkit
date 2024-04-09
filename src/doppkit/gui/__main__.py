@@ -68,7 +68,7 @@ def main():
     app = Application(
         token=None,
         url="https://grid.nga.mil/grid",
-        # log_level=logging.DEBUG,  # override for custom messaging
+        log_level=logging.DEBUG,  # override for custom messaging
         threads=5,
         run_method="GUI",
         progress=True,
