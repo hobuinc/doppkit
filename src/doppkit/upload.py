@@ -9,7 +9,7 @@ import httpx
 from urllib.parse import urlparse, parse_qs
 from collections import defaultdict
 
-from typing import NamedTuple, TypedDict, Optional
+from typing import TypedDict, Optional
 
 from .cache import Progress
 from .app import Application
@@ -129,6 +129,7 @@ async def upload_chunk(
             file_path.as_posix(),
             completed=new_completition
         )
+    logger.debug(f"Finished uploading chunk {part_number} of {file_path.as_posix()}")
 
     part_info[file_path].append(
         {

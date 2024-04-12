@@ -1,12 +1,10 @@
 __all__ = ["Grid", "Exportfile", "Export", "AOI"]
 
-import asyncio
 import itertools
 import json
 import warnings
 import logging
 import pathlib
-import os
 import math
 
 import httpx
@@ -190,7 +188,6 @@ class Grid:
         key = f"test-ogi/upload/{filepath.name}"
         upload_endpoint_url = f"{self.args.url}{upload_endpoint_ext}"
 
-        params = {"key": key}
         headers = {"Authorization": f"Bearer {self.args.token}"}
         async with httpx.AsyncClient(verify=not self.args.disable_ssl_verification) as client:
             params = {"key": key}

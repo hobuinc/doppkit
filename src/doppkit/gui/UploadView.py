@@ -1,4 +1,3 @@
-from .ExportView import ExportDelegate
 from typing import TYPE_CHECKING, Optional
 import os
 from qtpy import QtCore, QtWidgets, QtGui
