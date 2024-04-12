@@ -178,6 +178,7 @@ class Grid:
     async def upload_asset(
             self,
             filepath: pathlib.Path,
+            directory: Optional[pathlib.Path] = None,
             bytes_per_chunk=MULTIPART_BYTES_PER_CHUNK,
             progress: Optional[Progress]=None
     ):
@@ -185,7 +186,11 @@ class Grid:
         source_size = filepath.stat().st_size
         chunks_count = int(math.ceil(source_size / float(bytes_per_chunk)))
 
-        key = f"test-ogi/upload/{filepath.name}"
+        key = ""
+        if directory is not None:
+            key += f"{directory.as_posix().strip('/')}/"
+
+        key += f"{filepath.name}"
         upload_endpoint_url = f"{self.args.url}{upload_endpoint_ext}"
 
         headers = {"Authorization": f"Bearer {self.args.token}"}
