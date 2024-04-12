@@ -3,7 +3,7 @@ from .. import __version__
 from ..grid import Grid, AOI
 from .cache import cache, DownloadUrl
 from qtpy import QtCore, QtGui, QtWidgets
-from typing import Optional, NamedTuple
+from typing import Optional, NamedTuple, Union
 from collections import defaultdict
 from dataclasses import dataclass
 import pathlib
@@ -413,7 +413,11 @@ class Window(QtWidgets.QMainWindow):
         setting.setValue("grid/token", self.doppkit.token)
 
     @qasync.asyncSlot()
-    async def uploadFiles(self, files: list[str]):
+    async def uploadFiles(
+        self,
+        files: list[str],
+        directory: Optional[Union[str, pathlib.Path]]=None
+    ):
 
         items = [
             UploadItem(filepath, self.uploadProgressInterconnect)
@@ -438,8 +442,15 @@ class Window(QtWidgets.QMainWindow):
         self.uploadView.show()
 
         for file_ in files:
+            file_path = pathlib.Path(file_)
+            relative_directory: Optional[pathlib.Path]
+            if directory is not None:
+                relative_directory = file_path.relative_to(pathlib.Path(directory).parent).parent
+            else:
+                relative_directory = None
             await api.upload_asset(
-                pathlib.Path(file_),
+                file_path,
+                directory=relative_directory,
                 progress=self.uploadProgressInterconnect
             )
 

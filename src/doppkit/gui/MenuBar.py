@@ -90,7 +90,8 @@ class FileMenu(QMenu):
             options=QFileDialog.Option.ReadOnly
         )
 
-        if directory is None:
+
+        if directory == "":
             # user cancelled, abort
             return None
 
@@ -111,7 +112,7 @@ class FileMenu(QMenu):
             raise RuntimeError("Main Window not found, how did this happen?")
 
         if hasattr(widget, 'uploadFiles'):
-            widget.uploadFiles(files_to_upload)
+            widget.uploadFiles(files_to_upload, directory=directory)
     
     @Slot()
     def _resetSettingsDialog(self) -> None:
