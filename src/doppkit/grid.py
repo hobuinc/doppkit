@@ -4,19 +4,27 @@ import itertools
 import json
 import warnings
 import logging
+import pathlib
+import math
 
 import httpx
-from typing import Optional, Iterable, TypedDict, Union
+from typing import Optional, Iterable, TypedDict, Union, TYPE_CHECKING
 
-from .cache import cache, DownloadUrl
+from .cache import cache, DownloadUrl, Progress
+from .upload import upload
+
+if TYPE_CHECKING:
+    from .upload import ETagDict
 
 logger = logging.getLogger(__name__)
 
 API_VERSION = "v4"
+MULTIPART_BYTES_PER_CHUNK = 10_000_000  # ~ 6mb
 
 aoi_endpoint_ext = f"/api/{API_VERSION}/aois"
 export_endpoint_ext = f"/api/{API_VERSION}/exports"
 task_endpoint_ext = f"/api/{API_VERSION}/tasks"
+upload_endpoint_ext = f"/api/{API_VERSION}/upload"
 
 
 class ExportStarted(TypedDict):
@@ -167,6 +175,79 @@ class Grid:
         return response["aois"]
 
 
+    async def upload_asset(
+            self,
+            filepath: pathlib.Path,
+            bytes_per_chunk=MULTIPART_BYTES_PER_CHUNK,
+            progress: Optional[Progress]=None
+    ):
+        logger.info(f"Starting upload of {filepath}")
+        source_size = filepath.stat().st_size
+        chunks_count = int(math.ceil(source_size / float(bytes_per_chunk)))
+
+        key = f"test-ogi/upload/{filepath.name}"
+        upload_endpoint_url = f"{self.args.url}{upload_endpoint_ext}"
+
+        headers = {"Authorization": f"Bearer {self.args.token}"}
+        async with httpx.AsyncClient(verify=not self.args.disable_ssl_verification) as client:
+            params = {"key": key}
+            response_upload_id = await client.get(
+                f"{upload_endpoint_url}/open/",
+                params=params,
+                headers=headers
+            )
+            logger.debug(f"Upload open call returned {response_upload_id}")
+
+            try:
+                upload_id = response_upload_id.json()["upload_id"]
+            except KeyError as e:
+                if "error" in response_upload_id.json():
+                    raise ConnectionError(response_upload_id.json()["error"]) from e
+                else:
+                    raise ConnectionError(response_upload_id.json()) from e
+
+            params.update(upload_id=upload_id, nparts=str(chunks_count))
+            response_urls = await client.get(
+                f"{upload_endpoint_url}/get_urls/",
+                params=params,
+                headers=headers
+            )
+
+            # want to make sure URLs are in order of part
+            urls = [
+                part['url'] 
+                for part in sorted(
+                    response_urls.json()["parts"],
+                    key=lambda part: part['part']
+                )
+            ]
+
+            part_info = await upload(
+                app=self.args,
+                filepath=filepath,
+                urls=urls,
+                bytes_per_chunk=bytes_per_chunk,
+                auth_header=headers,
+                progress=progress
+            )
+
+            data = {
+                "upload_id": upload_id,
+                "key": key,
+                "upload_info": part_info
+            }
+
+            response_finish = await client.put(
+                f"{upload_endpoint_url}/close/",
+                json=data,
+                headers=headers
+            )
+            logger.debug(f"Upload close call returned {response_finish}")
+            logger.info(f"Finished upload of {filepath}")
+
+        return None
+
+
     async def make_exports(
             self,
             aoi: AOI,
@@ -200,7 +281,7 @@ class Grid:
                 product_ids.extend([entry["id"] for entry in aoi["vector_intersects"]])
             else:
                 warnings.warn(
-                    f"Unknown intersect type {intersection}, needs to be one of "
+                    f"Unknown intersect type {intersection}, needs to be one of " +
                     "raster, mesh, pointcloud, or vector.  Ignoring.",
                     stacklevel=2
                 )
@@ -286,7 +367,7 @@ class Grid:
         else:
             if "error" in response:
                 logger.warning(
-                    f"Attempting to access {export_id=} resulted in the following error "
+                    f"Attempting to access {export_id=} resulted in the following error " +
                     f"from GRiD: {response['error']}"
                 )
                 return []
