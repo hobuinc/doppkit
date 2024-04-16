@@ -126,8 +126,6 @@ class AOI(TypedDict):
     vector_intersects: list[VectorProduct]
 
 
-
-
 class Grid:
     def __init__(self, args):
         self.args = args

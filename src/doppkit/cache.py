@@ -100,7 +100,7 @@ async def cache(
         urls: Iterable[DownloadUrl],
         headers: dict[str, str],
         progress: Optional[Progress] = None
-) -> Iterable[Union[Content, Exception, httpx.Response]]:
+) -> Iterable[Union[Content, BaseException, httpx.Response]]:
     limits = httpx.Limits(
         max_keepalive_connections=app.threads, max_connections=app.threads
     )

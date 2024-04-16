@@ -1,8 +1,9 @@
 import os
 from .. import __version__
-from ..grid import Grid, AOI
+from ..grid import Grid, AOI, Export
 from .cache import cache, DownloadUrl
 from qtpy import QtCore, QtGui, QtWidgets
+import contextlib
 from typing import Optional, NamedTuple, Union
 from collections import defaultdict
 from dataclasses import dataclass
@@ -187,13 +188,20 @@ class DirectoryValidator(QtGui.QValidator):
 class URLValidator(QtGui.QValidator):
 
     def validate(self, input_: str, pos: int) -> tuple[QtGui.QValidator.State, str, int]:
-        # url = QtCore.QUrl(input_)
         url = QtCore.QUrl.fromUserInput(input_)
         if url.isValid():
             state = QtGui.QValidator.State.Acceptable
         else:
             state = QtGui.QValidator.State.Intermediate
         return state, input_, pos
+
+
+class ExportValidator(QtGui.QRegularExpressionValidator):
+
+    def validate(self, input_: str, pos: int) -> tuple[QtGui.QValidator.State, str, int]:
+        state = super().validate(input_, pos)
+        # allows for styling changes on potentially bogus input...
+        return state
 
 
 class TreeView(QtWidgets.QTreeView):
@@ -211,6 +219,7 @@ class Window(QtWidgets.QMainWindow):
         self.setWindowTitle(f"doppkit - {__version__}")
         self.doppkit = doppkit_application
         self.AOI_ids: list[int] = []
+        self.export_ids: list[int] = []
         self.AOIs: list[AOI] = []  # populated from GRiD
 
         self.exportProgressTracker = QtExportProgress()
@@ -262,11 +271,24 @@ class Window(QtWidgets.QMainWindow):
         aoiLineEdit = QtWidgets.QLineEdit()
 
         # TODO: don't use IntValidator, should accept coma separated values
-        aoiValidator = QtGui.QIntValidator(parent=None, bottom=0)
+        aoiValidator = QtGui.QIntValidator(parent=None)
         aoiValidator.setBottom(0)
         aoiLineEdit.setValidator(aoiValidator)
         aoiLineEdit.editingFinished.connect(self.aoisChanged)
         aoiLabel.setBuddy(aoiLineEdit)
+
+        # Export IDs
+        exportLabel = QtWidgets.QLabel("&Exports")
+        exportLabel.setFont(labelFont)
+        exportLineEdit = QtWidgets.QLineEdit()
+        exportLineEdit.editingFinished.connect(self.exportsChanged)
+        exportLabel.setBuddy(exportLineEdit)
+        exportLineEdit.setToolTip(
+            "Coma separated list of exports to download.\n" +
+            "Leaving blank will download all available exports."
+        )
+        exportValidator = ExportValidator(QtCore.QRegularExpression(r"\d+(?:\s*,\s*\d+)*"))
+        exportLineEdit.setValidator(exportValidator)
 
         # Download Location
         downloadLabel = QtWidgets.QLabel("&Download Location")
@@ -306,6 +328,10 @@ class Window(QtWidgets.QMainWindow):
             "aoi": (
                 aoiLabel,
                 aoiLineEdit
+            ),
+            "export": (
+                exportLabel,
+                exportLineEdit
             ),
             "token": (
                 tokenLabel,
@@ -366,8 +392,7 @@ class Window(QtWidgets.QMainWindow):
         self.uploadProgressInterconnect = QtUploadProgress()
         self.show()
 
-
-    def closeEvent(self, evt: QtGui.QCloseEvent) -> None:
+    def closeEvent(self, event: QtGui.QCloseEvent) -> None:
         settings = QtCore.QSettings()
         settings.beginGroup("MainWindow")
         settings.setValue("geometry", self.saveGeometry())
@@ -386,10 +411,11 @@ class Window(QtWidgets.QMainWindow):
             return None
         
         lineEdit = self.sender().parent()
-        lineEdit.setText(directory)
+        if isinstance(lineEdit, QtWidgets.QLineEdit):
+            lineEdit.setText(directory)
 
     def showLogView(self):
-        raise self.logView.show()
+        self.logView.show()
 
     def gridURLChanged(self):
         self.doppkit.url = QtCore.QUrl.fromUserInput(self.sender().currentText()).url()
@@ -406,6 +432,12 @@ class Window(QtWidgets.QMainWindow):
             self.AOI_ids = [int(aoi) for aoi in self.sender().text().split(",")]
         except (IndexError, ValueError):
             self.AOI_ids = []
+
+    def exportsChanged(self) -> None:
+        try:
+            self.export_ids = [int(export_id) for export_id in self.sender().text().split(',')]
+        except (IndexError, ValueError):
+            self.export_ids = []
 
     def tokenChanged(self) -> None:
         self.doppkit.token = self.sender().text().strip()
@@ -468,7 +500,11 @@ class Window(QtWidgets.QMainWindow):
         # if enabled, check the other elements...
         if enable_ssl:
             # check if the GRiD URL is in the white-list
-            whitelisted_urls = settings.value("grid/ssl_url_white_list", [], type=list)
+            whitelisted_urls: list[str] = settings.value(
+                "grid/ssl_url_white_list",
+                [],
+                type=list
+            )
             whitelisted_host_names = {urlparse(url).hostname for url in whitelisted_urls}
             hostname = urlparse(self.doppkit.url).hostname
             if hostname in whitelisted_host_names:
@@ -534,8 +570,17 @@ class Window(QtWidgets.QMainWindow):
         download_dir.mkdir(exist_ok=True)
 
         urls = []
+        export_ids_filtered = set()
+        export_ids_to_filter = self.export_ids.copy()
         for aoi in self.AOIs:
             for export in aoi["exports"]:
+                export_id = export["id"]
+                if export_ids_to_filter:
+                    # if boolean, we're filtering
+                    if export_id in export_ids_to_filter:
+                        # move the export_id from ones to filter to the ones that have
+                        # been filtered
+                        export_ids_filtered.add(export_ids_to_filter.pop(export_id))
                 files = await api.get_exports(export["id"])
 
                 download_size = 0
@@ -563,11 +608,17 @@ class Window(QtWidgets.QMainWindow):
                 self.progressInterconnect.export_progress[export["id"]] = progress_tracker
                 self.progressInterconnect.aois[aoi["id"]].append(progress_tracker)
 
-        try:
+        if export_ids_to_filter:
+            # there are some exports we intended to filter for, but weren't present in the AOIs
+            logger.warning(
+                f"The following export_ids were entered to filter for, but were not seen in the given AOIs: {export_ids_to_filter}"
+            )
+        with contextlib.suppress(Exception):
             _ = await cache(self.doppkit, urls, {}, progress=self.progressInterconnect)
-            logger.info("Download AOI Exports Complete")
-        finally:
-            self.buttonDownload.setEnabled(True)
+        logger.info("Download AOI Exports Complete")
+
+        self.buttonDownload.setEnabled(True)
+
 
 
 @dataclass
