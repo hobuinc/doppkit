@@ -7,6 +7,7 @@ from qtpy.QtGui import QKeySequence
 from qtpy.QtWidgets import QAction, QApplication, QFileDialog, QMenu, QMenuBar, QMainWindow
 
 from .SettingsDialog import SettingsDialog
+from .MagicLinkDialog import MagicLinkDialog
 
 class MenuBar(QMenuBar):
 
@@ -20,28 +21,31 @@ class MenuBar(QMenuBar):
                 break
         else:
             raise RuntimeError("Main Window not Found")
-        self.fileMenu = FileMenu(self)
-        self.viewMenu = ViewMenu(self)
+        self.fileMenu = FileMenu(parent=self)
+        self.viewMenu = ViewMenu(parent=self)
         self.helpMenu = QMenu("Help", self)
 
         for menu in [self.fileMenu, self.viewMenu, self.helpMenu]:
             self.addMenu(menu)
 
-        self.settingsDialog: typing.Optional[SettingsDialog] = None
 
 class FileMenu(QMenu):
 
-    def __init__(self, title: typing.Optional[str] = None, parent: MenuBar = None) -> None:
-        if isinstance(title, str):
-            super().__init__(title, parent)
-        else:
-            parent, title = title, ""
-            super().__init__(parent)
+    def __init__(
+        self,
+        title: typing.Optional[str] = None,
+        parent: typing.Optional[MenuBar] = None
+    ) -> None:
+        if title is None:
+            title = ""
+        super().__init__(title, parent)
         self.setTitle("File")
         self.settingsDialog: typing.Optional['SettingsDialog'] = None
+        self.magicLinkDialog: typing.Optional['MagicLinkDialog'] = None
         self._settingsAction()
         self._uploadFileAction()
         self._uploadDirectoryAction()
+        self._provideMagicLinkAction()
         self._quitAction()
 
     def _settingsAction(self) -> None:
@@ -57,6 +61,14 @@ class FileMenu(QMenu):
             self.settingsDialog = SettingsDialog(self)
             self.settingsDialog.rejected.connect(self._resetSettingsDialog)
             self.settingsDialog.show()
+
+    @Slot()
+    def invokeMagicLinkDialog(self):
+        if self.magicLinkDialog is None:
+            self.magicLinkDialog = MagicLinkDialog(parent=self)
+            mainWindow = self.parent().mainWindow
+            self.magicLinkDialog.magicLinkText.connect(mainWindow.parseMagicLink)
+        self.magicLinkDialog.show()
 
     @Slot()
     def uploadFileDialog(self):
@@ -138,6 +150,11 @@ class FileMenu(QMenu):
         uploadDirectoryAction.setStatusTip("Upload Directory Contents")
         uploadDirectoryAction.triggered.connect(self.uploadDirectoryDialog)
         self.addAction(uploadDirectoryAction)
+
+    def _provideMagicLinkAction(self):
+        provideMagicLinkAction = QAction("Import Magic Link", self)
+        provideMagicLinkAction.triggered.connect(self.invokeMagicLinkDialog)
+        self.addAction(provideMagicLinkAction)
 
 
 class ViewMenu(QMenu):
