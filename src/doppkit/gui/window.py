@@ -1,6 +1,6 @@
 import os
 from .. import __version__
-from ..grid import Grid, AOI, Export
+from ..grid import Grid, AOI
 from .cache import cache, DownloadUrl
 from qtpy import QtCore, QtGui, QtWidgets
 import contextlib
@@ -14,7 +14,6 @@ import time
 from urllib.parse import urlparse
 
 import qasync
-
 
 from .ExportView import ExportModel, ExportDelegate
 from .UploadView import UploadModel, UploadItem, UploadDelegate
@@ -242,53 +241,53 @@ class Window(QtWidgets.QMainWindow):
         urlLabel = QtWidgets.QLabel("&Server")
         labelFont = urlLabel.font()
         labelFont.setPointSize(10)
-        urlLineComboBox = QtWidgets.QComboBox()
-        urlLineComboBox.addItems(
+        self.urlLineComboBox = QtWidgets.QComboBox()
+        self.urlLineComboBox.addItems(
             [
                 "https://grid.nga.mil/grid",
                 "https://grid.nga.smil.mil",
                 "https://grid.nga.ic.gov"
             ]
         )
-        urlLineComboBox.setEditable(True)
-        urlLineComboBox.currentTextChanged.connect(self.gridURLChanged)
+        self.urlLineComboBox.setEditable(True)
+        self.urlLineComboBox.currentTextChanged.connect(self.gridURLChanged)
         urlLabel.setFont(labelFont)
-        urlLabel.setBuddy(urlLineComboBox)
+        urlLabel.setBuddy(self.urlLineComboBox)
         urlValidator = URLValidator(parent=None)
-        urlLineComboBox.setValidator(urlValidator)
+        self.urlLineComboBox.setValidator(urlValidator)
 
         # Token Widgets
         tokenLabel = QtWidgets.QLabel("&Token")
         tokenLabel.setFont(labelFont)
-        tokenLineEdit = QtWidgets.QLineEdit()
-        tokenLineEdit.setEchoMode(QtWidgets.QLineEdit.EchoMode.PasswordEchoOnEdit)
-        tokenLineEdit.editingFinished.connect(self.tokenChanged)
-        tokenLabel.setBuddy(tokenLineEdit)
+        self.tokenLineEdit = QtWidgets.QLineEdit()
+        self.tokenLineEdit.setEchoMode(QtWidgets.QLineEdit.EchoMode.PasswordEchoOnEdit)
+        self.tokenLineEdit.editingFinished.connect(self.tokenChanged)
+        tokenLabel.setBuddy(self.tokenLineEdit)
 
         # AOI Widgets
         aoiLabel = QtWidgets.QLabel("&AOI")
         aoiLabel.setFont(labelFont)
-        aoiLineEdit = QtWidgets.QLineEdit()
+        self.aoiLineEdit = QtWidgets.QLineEdit()
 
         # TODO: don't use IntValidator, should accept coma separated values
         aoiValidator = QtGui.QIntValidator(parent=None)
         aoiValidator.setBottom(0)
-        aoiLineEdit.setValidator(aoiValidator)
-        aoiLineEdit.editingFinished.connect(self.aoisChanged)
-        aoiLabel.setBuddy(aoiLineEdit)
+        self.aoiLineEdit.setValidator(aoiValidator)
+        self.aoiLineEdit.editingFinished.connect(self.aoisChanged)
+        aoiLabel.setBuddy(self.aoiLineEdit)
 
         # Export IDs
         exportLabel = QtWidgets.QLabel("&Exports")
         exportLabel.setFont(labelFont)
-        exportLineEdit = QtWidgets.QLineEdit()
-        exportLineEdit.editingFinished.connect(self.exportsChanged)
-        exportLabel.setBuddy(exportLineEdit)
-        exportLineEdit.setToolTip(
+        self.exportLineEdit = QtWidgets.QLineEdit()
+        self.exportLineEdit.editingFinished.connect(self.exportsChanged)
+        exportLabel.setBuddy(self.exportLineEdit)
+        self.exportLineEdit.setToolTip(
             "Coma separated list of exports to download.\n" +
             "Leaving blank will download all available exports."
         )
         exportValidator = ExportValidator(QtCore.QRegularExpression(r"\d+(?:\s*,\s*\d+)*"))
-        exportLineEdit.setValidator(exportValidator)
+        self.exportLineEdit.setValidator(exportValidator)
 
         # Download Location
         downloadLabel = QtWidgets.QLabel("&Download Location")
@@ -308,8 +307,8 @@ class Window(QtWidgets.QMainWindow):
         downloadAction.triggered.connect(self.showDownloadDialog)
 
         self.buttonList = QtWidgets.QPushButton("List Exports")
-        self.buttonList.clicked.connect(aoiLineEdit.editingFinished)
-        self.buttonList.clicked.connect(tokenLineEdit.editingFinished)
+        self.buttonList.clicked.connect(self.aoiLineEdit.editingFinished)
+        self.buttonList.clicked.connect(self.tokenLineEdit.editingFinished)
         # we connect using a queued connection to ensure that the AOILineEdit
         # registers the finished signal
         self.buttonList.clicked.connect(
@@ -317,8 +316,8 @@ class Window(QtWidgets.QMainWindow):
             QtCore.Qt.ConnectionType.QueuedConnection
         )
         self.buttonDownload = QtWidgets.QPushButton("Download Exports")
-        self.buttonDownload.clicked.connect(aoiLineEdit.editingFinished)
-        self.buttonDownload.clicked.connect(tokenLineEdit.editingFinished)
+        self.buttonDownload.clicked.connect(self.aoiLineEdit.editingFinished)
+        self.buttonDownload.clicked.connect(self.tokenLineEdit.editingFinished)
         self.buttonDownload.clicked.connect(downloadLineEdit.editingFinished)
         self.buttonDownload.clicked.connect(
             self.downloadExports,
@@ -327,15 +326,15 @@ class Window(QtWidgets.QMainWindow):
         grouping = {
             "aoi": (
                 aoiLabel,
-                aoiLineEdit
+                self.aoiLineEdit
             ),
             "export": (
                 exportLabel,
-                exportLineEdit
+                self.exportLineEdit
             ),
             "token": (
                 tokenLabel,
-                tokenLineEdit
+                self.tokenLineEdit
             ),
             "destination": (
                 downloadLabel,
@@ -343,7 +342,7 @@ class Window(QtWidgets.QMainWindow):
             ),
             "url": (
                 urlLabel,
-                urlLineComboBox
+                self.urlLineComboBox
             ),
         }
 
@@ -372,10 +371,10 @@ class Window(QtWidgets.QMainWindow):
             settings.setValue("grid/ssl_url_white_list", ssl_white_list)
 
         # populate fields with previously stored values or defaults otherwise
-        tokenLineEdit.setText(settings.value("grid/token"))
+        self.tokenLineEdit.setText(settings.value("grid/token"))
         self.doppkit.token = settings.value("grid/token")
 
-        urlLineComboBox.setEditText(str(settings.value("grid/url", "https://grid.nga.mil/grid")))
+        self.urlLineComboBox.setEditText(str(settings.value("grid/url", "https://grid.nga.mil/grid")))
         
         downloadLineEdit.setText(
             str(
@@ -434,15 +433,40 @@ class Window(QtWidgets.QMainWindow):
             self.AOI_ids = []
 
     def exportsChanged(self) -> None:
-        try:
-            self.export_ids = [int(export_id) for export_id in self.sender().text().split(',')]
-        except (IndexError, ValueError):
-            self.export_ids = []
+        sender = self.sender()
+        if isinstance(sender, QtWidgets.QLineEdit):
+            try:
+                self.export_ids = [
+                    int(export_id)
+                    for export_id in sender.text().split(',')
+                ]
+            except (IndexError, ValueError):
+                self.export_ids = []
+
+    @QtCore.Slot(object)
+    def parseMagicLink(self, text: str) -> None:
+
+        fields = [
+            self.exportLineEdit,
+            self.aoiLineEdit,
+            self.tokenLineEdit,
+            self.urlLineComboBox
+        ]
+
+        for value, field in zip(text.split("|"), fields):
+            if isinstance(field, QtWidgets.QComboBox):
+                field.setEditText(f"https://{value}")
+                field.currentTextChanged.emit()
+            else:
+                field.setText(value)
+                field.editingFinished.emit()
 
     def tokenChanged(self) -> None:
-        self.doppkit.token = self.sender().text().strip()
-        setting = QtCore.QSettings()
-        setting.setValue("grid/token", self.doppkit.token)
+        sender = self.sender()
+        if isinstance(sender, QtWidgets.QLineEdit):
+            self.doppkit.token = sender.text().strip()
+            setting = QtCore.QSettings()
+            setting.setValue("grid/token", self.doppkit.token)
 
     @qasync.asyncSlot()
     async def uploadFiles(
@@ -504,7 +528,7 @@ class Window(QtWidgets.QMainWindow):
                 "grid/ssl_url_white_list",
                 [],
                 type=list
-            )
+            )  #type: ignore
             whitelisted_host_names = {urlparse(url).hostname for url in whitelisted_urls}
             hostname = urlparse(self.doppkit.url).hostname
             if hostname in whitelisted_host_names:
