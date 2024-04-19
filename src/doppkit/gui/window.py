@@ -218,7 +218,7 @@ class Window(QtWidgets.QMainWindow):
         self.setWindowTitle(f"doppkit - {__version__}")
         self.doppkit = doppkit_application
         self.AOI_ids: list[int] = []
-        self.export_ids: list[int] = []
+        self.export_ids: set[int] = []
         self.AOIs: list[AOI] = []  # populated from GRiD
 
         self.exportProgressTracker = QtExportProgress()
@@ -436,12 +436,12 @@ class Window(QtWidgets.QMainWindow):
         sender = self.sender()
         if isinstance(sender, QtWidgets.QLineEdit):
             try:
-                self.export_ids = [
-                    int(export_id)
+                self.export_ids = {
+                    int(export_id) 
                     for export_id in sender.text().split(',')
-                ]
+                }
             except (IndexError, ValueError):
-                self.export_ids = []
+                self.export_ids = set()
 
     @QtCore.Slot(object)
     def parseMagicLink(self, text: str) -> None:
@@ -576,7 +576,6 @@ class Window(QtWidgets.QMainWindow):
         self.exportView.resize(treeViewSize)
         self.exportView.show()
 
-
     @qasync.asyncSlot()
     async def downloadExports(self):
         self.buttonDownload.setEnabled(False)
@@ -594,17 +593,19 @@ class Window(QtWidgets.QMainWindow):
         download_dir.mkdir(exist_ok=True)
 
         urls = []
-        export_ids_filtered = set()
         export_ids_to_filter = self.export_ids.copy()
         for aoi in self.AOIs:
             for export in aoi["exports"]:
                 export_id = export["id"]
-                if export_ids_to_filter:
-                    # if boolean, we're filtering
-                    if export_id in export_ids_to_filter:
-                        # move the export_id from ones to filter to the ones that have
-                        # been filtered
-                        export_ids_filtered.add(export_ids_to_filter.pop(export_id))
+                if self.export_ids:
+                    # we're filtering!
+                    if export_id not in export_ids_to_filter:
+                        # we have across an export_id we don't care about...
+                        continue
+                    # move the export_id from ones to filter to the ones that have
+                    # been filtered
+                    export_ids_to_filter.remove(export_id)
+
                 files = await api.get_exports(export["id"])
 
                 download_size = 0
