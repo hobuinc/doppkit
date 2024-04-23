@@ -27,7 +27,7 @@ class MagicLinkDialog(QtWidgets.QDialog):
 			QtCore.Qt.Orientation.Horizontal
 		)
 		self.buttonBox.accepted.connect(self.passMagicLinkText)
-		self.buttonBox.rejected.connect(self.close)
+		self.buttonBox.rejected.connect(self.cancel)
 
 		layout = QtWidgets.QVBoxLayout()
 		layout.addWidget(label)
@@ -39,4 +39,10 @@ class MagicLinkDialog(QtWidgets.QDialog):
 	@QtCore.Slot()
 	def passMagicLinkText(self):
 		self.magicLinkText.emit(self.lineEdit.text())
+		self.lineEdit.clear()
+		self.close()
+
+	@QtCore.Slot()
+	def cancel(self):
+		self.lineEdit.clear()
 		self.close()

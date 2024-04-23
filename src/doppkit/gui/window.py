@@ -1,7 +1,7 @@
 import os
 from .. import __version__
 from ..grid import Grid, AOI
-from .cache import cache, DownloadUrl
+from .cache import cache
 from qtpy import QtCore, QtGui, QtWidgets
 import contextlib
 from typing import Optional, NamedTuple, Union
