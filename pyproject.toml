@@ -27,7 +27,7 @@ homepage = "https://github.com/hobuinc/doppkit"
 repository = "https://github.com/hobuinc/doppkit"
 
 [project.optional-dependencies]
-GUI = ["qtpy", "PySide6-essentials", "qasync"]
+GUI = ["qtpy", "PySide6-essentials~=6.6.0", "qasync"]
 
 [tool.black]
 line-length = 88

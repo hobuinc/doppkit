@@ -1,4 +1,4 @@
-__version__ = "0.4.1dev0"
+__version__ = "0.4.1"
 
 from . import cache
 from . import grid
