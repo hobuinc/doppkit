@@ -7,7 +7,7 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'doppkit'
-copyright = '2023, Hobu Inc.'
+copyright = '2024, Hobu Inc.'
 author = 'Ognyan Moore'
 
 # The full version, including alpha/beta/rc tags
