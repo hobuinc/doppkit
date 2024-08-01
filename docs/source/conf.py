@@ -1,3 +1,5 @@
+import os
+
 # Configuration file for the Sphinx documentation builder.
 #
 # For the full list of built-in configuration values, see the documentation:
@@ -49,10 +51,17 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
+html_baseurl = os.environ.get("READTHEDOCS_CANONICAL_URL", "")
+
+
 html_theme = 'alabaster'
 html_static_path = [
     # '_static'  # not actually used, but causes a warning in RTD since empty
 ]
+
+html_context = {}
+if os.environ.get("READTHEDOCS", "") == "True":
+    html_context["READTHEDOCS"] = True
 
 # -- Options for LATEX output ------------------------------------------------
 
