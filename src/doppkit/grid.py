@@ -356,7 +356,12 @@ class Grid:
             return []
         except AttributeError as e:
             if isinstance(export_files[0], Exception):
-                logger.error(f"Doppkit Cache Function Returned the following exception: {export_files[0]}")
+                logger.error("Doppkit Cache Function Returned the following exception:")
+                logger.error(export_files[0], exc_info=export_files[0])
+                logger.info(
+                    "If the above is a httpx.ReadError, likely a timeout on the GRiD "
+                    "end has interrupted the download."
+                )
                 raise export_files[0] from e
             elif isinstance(export_files[0], httpx.Response):            
                 await export_files[0].aread()
