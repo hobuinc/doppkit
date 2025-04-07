@@ -49,6 +49,11 @@ class Application:
             Filter out AOI PKs below this value.
         """
         self.token = token if token is not None else os.getenv("GRID_ACCESS_TOKEN", "")
+        if not self.token:
+            raise RuntimeError(
+                "No GRiD Token Provided either by argument or GRID_ACCESS_TOKEN "
+                "environment variable."
+            )
         # need to assign the attribute
         self._url = ""
         self.url = url
